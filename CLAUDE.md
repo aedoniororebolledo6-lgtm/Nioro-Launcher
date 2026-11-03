@@ -14,7 +14,8 @@ El dueño habla **español**: responde siempre en español, claro y sin tecnicis
 ## Publicar una actualización
 El usuario quiere que **las actualizaciones le lleguen solas**. El flujo:
 1. Trabajar en la rama asignada → push → esperar "Verificar rama" en verde.
-2. Crear PR a `main` y fusionarlo (`mcp__github__create_pull_request` + `merge_pull_request`) solo si el usuario lo pide.
+2. Crear PR a `main` y fusionarlo (`mcp__github__create_pull_request` + `merge_pull_request`). **El usuario quiere
+   que siempre se cree el PR y se fusione** en cuanto "Verificar rama" esté en verde, sin preguntar.
 3. `build.yml` compila y publica el release `latest` con `Nioro-Launcher.apk` y `version.txt`
    (= número de ejecución de Actions = `versionCode`). `Updater.kt` compara ese número y lo instala.
 4. Si la rama ya se fusionó antes, reiníciala desde `origin/main` antes de seguir.
