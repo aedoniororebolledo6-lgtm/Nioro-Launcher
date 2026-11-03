@@ -155,6 +155,17 @@ object S {
         version++
     }
 
+    fun resetIds(ids: IntArray) {
+        val e = sp?.edit() ?: return
+        for (id in ids) {
+            val d = defs[id]
+            v[id] = d.def
+            e.remove(d.key)
+        }
+        e.apply()
+        version++
+    }
+
     fun resetAll() {
         sp?.edit()?.clear()?.apply()
         for (d in defs) v[d.id] = d.def

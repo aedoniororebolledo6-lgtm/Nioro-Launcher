@@ -84,11 +84,12 @@ class SettingsActivity : Activity() {
         const val PAGE_LOOK = 5
         const val PAGE_BATTERY = 6
         const val PAGE_ABOUT = 7
+        const val PAGE_GESTURES = 8
         private const val REQ_HOME = 7
 
         val CAT_TITLES = arrayOf(
             "Pantalla de inicio", "Dock", "Vista de apps", "Animaciones",
-            "Apps en segundo plano", "Apariencia", "Batería y rendimiento", "Acerca de"
+            "Apps en segundo plano", "Apariencia", "Batería y rendimiento", "Acerca de", "Gestos y vibración"
         )
         val CAT_SUBS = arrayOf(
             "Cuadrícula, forma de iconos, reloj y nombres",
@@ -98,11 +99,12 @@ class SettingsActivity : Activity() {
             "Estilo de recientes y acceso de uso",
             "Cristal líquido y desenfoque",
             "Ahorro, 120 Hz y consumo",
-            "Versión y actualizaciones"
+            "Versión y actualizaciones",
+            "14 gestos, sus acciones y la vibración"
         )
         val CAT_GLYPHS = intArrayOf(
             Glyphs.HOME, Glyphs.DOCK, Glyphs.GRID, Glyphs.MOTION,
-            Glyphs.RECENTS, Glyphs.PALETTE, Glyphs.BATTERY, Glyphs.INFO
+            Glyphs.RECENTS, Glyphs.PALETTE, Glyphs.BATTERY, Glyphs.INFO, Glyphs.MORE
         )
     }
 
@@ -133,7 +135,7 @@ class SettingsActivity : Activity() {
         }
         push(buildMain(), false)
         val start = intent.getIntExtra("page", -1)
-        if (start in 0..7) stack.post { push(buildCategory(start), false) }
+        if (start in 0..8) stack.post { push(buildCategory(start), false) }
     }
 
     override fun onResume() {
@@ -273,8 +275,8 @@ class SettingsActivity : Activity() {
         scroll.setOnScrollChangeListener { _, _, y, _, _ ->
             val h = header.height.toFloat().coerceAtLeast(1f)
             val t = clamp01(y / (h * 0.55f))
-            big.alpha = 1f - t
-            big.translationY = y * 0.35f
+            header.alpha = clamp01(1f - t * 1.15f)
+            header.translationY = y * 0.35f
             big.scaleX = 1f - 0.08f * t
             big.scaleY = 1f - 0.08f * t
             small.alpha = smooth(0.6f, 1f, t)
@@ -311,28 +313,22 @@ class SettingsActivity : Activity() {
         val up = card(c, dp(6f).toInt())
         updateRow(up)
 
-        // Ajustes avanzados (motor de ajustes con buscador)
-        val adv = card(c, dp(6f).toInt())
-        val ar = LinearLayout(this)
-        ar.orientation = LinearLayout.HORIZONTAL
-        ar.gravity = Gravity.CENTER_VERTICAL
-        ar.setPadding(dp(14f).toInt(), dp(10f).toInt(), dp(10f).toInt(), dp(10f).toInt())
-        ar.background = ripple(dp(22f))
-        ar.addView(CategoryIconView(this, Glyphs.GEAR, OneColors.ACCENT), LinearLayout.LayoutParams(dp(42f).toInt(), dp(42f).toInt()))
-        val at = LinearLayout(this)
-        at.orientation = LinearLayout.VERTICAL
-        at.setPadding(dp(16f).toInt(), 0, dp(8f).toInt(), 0)
-        at.addView(text("Ajustes avanzados", 17f, 600))
-        at.addView(text(S.count().toString() + " ajustes · busca cualquiera", 13.5f, 400, OneColors.SUB).apply { setPadding(0, dp(2f).toInt(), 0, 0) })
-        ar.addView(at, LinearLayout.LayoutParams(0, -2, 1f))
-        val ch = View(this)
-        ch.background = GlyphDrawable(Glyphs.CHEVRON, 18f, 0x80FFFFFF.toInt())
-        ar.addView(ch, LinearLayout.LayoutParams(dp(18f).toInt(), dp(18f).toInt()))
-        ar.setOnClickListener { push(buildAdvanced()) }
-        adv.addView(ar)
+        // Buscador de todos los ajustes
+        val sk = card(c, dp(4f).toInt())
+        val sr = LinearLayout(this)
+        sr.orientation = LinearLayout.HORIZONTAL
+        sr.gravity = Gravity.CENTER_VERTICAL
+        sr.setPadding(dp(18f).toInt(), dp(14f).toInt(), dp(18f).toInt(), dp(14f).toInt())
+        sr.background = ripple(dp(22f))
+        val sg = View(this)
+        sg.background = GlyphDrawable(Glyphs.SEARCH, 22f, 0xCCFFFFFF.toInt())
+        sr.addView(sg, LinearLayout.LayoutParams(dp(22f).toInt(), dp(22f).toInt()))
+        sr.addView(text("Buscar entre " + S.count() + " ajustes", 16f, 400, OneColors.SUB).apply { setPadding(dp(14f).toInt(), 0, 0, 0) })
+        sr.setOnClickListener { push(buildSearch()) }
+        sk.addView(sr)
 
         // Categorías agrupadas como en los Ajustes de One UI
-        val groups = arrayOf(intArrayOf(0, 1, 2), intArrayOf(3, 4), intArrayOf(5, 6), intArrayOf(7))
+        val groups = arrayOf(intArrayOf(0, 1, 2), intArrayOf(3, 4, 8), intArrayOf(5, 6), intArrayOf(7))
         for (g in groups) {
             val cc = card(c, dp(6f).toInt())
             for ((n, i) in g.withIndex()) {
@@ -349,7 +345,18 @@ class SettingsActivity : Activity() {
         c.addView(tip)
     }
 
-    private fun buildCategory(i: Int): View = page(CAT_TITLES[i], null, false) { c ->
+    private fun buildCategory(i: Int): View = page(CAT_TITLES[i], CAT_SUBS[i], false) { c ->
+        if (i == PAGE_LOOK) themesCard(c)
+        if (i == PAGE_GESTURES) {
+            val t = text("Elige qué hace cada gesto en la pantalla de inicio y cómo vibra el launcher.", 13.5f, 400, OneColors.SUB)
+            t.setPadding(dp(20f).toInt(), dp(4f).toInt(), dp(20f).toInt(), 0)
+            c.addView(t)
+        }
+        basicSettings(c, i)
+        detailSections(c, i)
+    }
+
+    private fun basicSettings(c: LinearLayout, i: Int) {
         when (i) {
             PAGE_HOME -> {
                 // vista previa en vivo de la pantalla de inicio
@@ -488,33 +495,61 @@ class SettingsActivity : Activity() {
         }
     }
 
-    // ---------------------------------------------------------------- Ajustes avanzados
-    private fun norm(x: String): String =
-        java.text.Normalizer.normalize(x.lowercase(), java.text.Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
+    /** encabezado de sección estilo One UI (texto pequeño de color sobre la tarjeta) */
+    private fun sectionLabel(c: LinearLayout, s0: String) {
+        val t = text(s0, 14f, 600, OneColors.ACCENT)
+        t.setPadding(dp(22f).toInt(), dp(24f).toInt(), dp(20f).toInt(), 0)
+        c.addView(t)
+    }
 
-    private fun buildAdvanced(): View = page("Ajustes avanzados", S.count().toString() + " ajustes", false) { c ->
-        // buscador
-        val sk = card(c, dp(8f).toInt())
-        val search = android.widget.EditText(this)
-        search.hint = "Buscar entre " + S.count() + " ajustes"
-        search.setHintTextColor(0x99FFFFFF.toInt())
-        search.setTextColor(Color.WHITE)
-        search.textSize = 16f
-        search.isSingleLine = true
-        search.background = null
-        search.setPadding(dp(16f).toInt(), dp(10f).toInt(), dp(16f).toInt(), dp(10f).toInt())
-        search.setCompoundDrawablesRelative(GlyphDrawable(Glyphs.SEARCH, 20f, 0xCCFFFFFF.toInt()), null, null, null)
-        search.compoundDrawablePadding = dp(12f).toInt()
-        sk.addView(search)
-        val results = LinearLayout(this)
-        results.orientation = LinearLayout.VERTICAL
-        c.addView(results)
-        val cats = LinearLayout(this)
-        cats.orientation = LinearLayout.VERTICAL
-        c.addView(cats)
+    private val ROW_COLORS = intArrayOf(
+        0xFF3E91FF.toInt(), 0xFF7C5CFF.toInt(), 0xFF00B8A9.toInt(), 0xFFFF7A45.toInt(), 0xFFFF4D8D.toInt(),
+        0xFFB45CFF.toInt(), 0xFF2FC26B.toInt(), 0xFFFFB020.toInt(), 0xFF22D3EE.toInt(), 0xFFEF4444.toInt()
+    )
 
-        // temas rápidos
-        val tk = card(cats)
+    /** todos los ajustes detallados de este menú, ordenados por secciones */
+    private fun detailSections(c: LinearLayout, menu: Int) {
+        val secs = Menus.forMenu(menu)
+        if (secs.isEmpty()) return
+        var lastHeader = ""
+        var k: LinearLayout? = null
+        var n = 0
+        for (sec in secs) {
+            if (sec.header != lastHeader) {
+                lastHeader = sec.header
+                sectionLabel(c, sec.header)
+                k = card(c, dp(6f).toInt())
+                n = 0
+            }
+            val kk = k ?: continue
+            if (n > 0) divider(kk, dp(72f))
+            val color = ROW_COLORS[(n + sec.kind * 3) % ROW_COLORS.size]
+            advRow(kk, Menus.glyph(sec), color, sec.title, sec.ids.size.toString() + " ajustes") { push(buildSection(sec)) }
+            n++
+        }
+        val rk = card(c, dp(6f).toInt())
+        button(rk, "Restablecer este menú", "Devuelve sus ajustes detallados a los valores originales", Glyphs.BACK) {
+            for (sec in secs) S.resetIds(sec.ids)
+            toast("Restablecido")
+        }
+    }
+
+    private fun buildSection(sec: Menus.Sec): View = page(sec.title, CAT_TITLES[sec.menu] + " · " + sec.header, false) { c ->
+        val k = card(c)
+        for ((n, id) in sec.ids.withIndex()) {
+            if (n > 0) divider(k, 0f)
+            item(k, S.defs[id], false)
+        }
+        val rk = card(c, dp(6f).toInt())
+        button(rk, "Restablecer esta sección", null, Glyphs.BACK) {
+            S.resetIds(sec.ids)
+            toast("Restablecido")
+            pop()
+        }
+    }
+
+    private fun themesCard(c: LinearLayout) {
+        val tk = card(c)
         tk.addView(text("Temas rápidos", 16.5f, 500).apply { setPadding(dp(20f).toInt(), 0, 0, dp(10f).toInt()) })
         val hs = HorizontalScrollView(this)
         hs.isHorizontalScrollBarEnabled = false
@@ -537,24 +572,33 @@ class SettingsActivity : Activity() {
         }
         hs.addView(row)
         tk.addView(hs)
+    }
 
-        // categorías
-        val groups = arrayOf(intArrayOf(0, 1, 2), intArrayOf(3, 4, 5), intArrayOf(6, 7, 8, 9, 10), intArrayOf(11, 12, 13, 14))
-        for (g in groups) {
-            val k = card(cats, dp(6f).toInt())
-            for ((n, ci) in g.withIndex()) {
-                if (n > 0) divider(k, dp(72f))
-                val cnt = S.defs.count { it.cat == ci }
-                advRow(k, S.CAT_GLYPH[ci], S.CAT_COLOR[ci], S.CATS[ci], S.CAT_SUB[ci] + " · " + cnt) { push(buildAdvCat(ci)) }
-            }
-        }
-        val rk = card(cats, dp(6f).toInt())
-        button(rk, "Restablecer todos los ajustes avanzados", "Vuelve a los valores originales", Glyphs.BACK) {
-            S.resetAll()
-            toast("Ajustes avanzados restablecidos")
-        }
+    // ---------------------------------------------------------------- Buscador
+    private fun norm(x: String): String =
+        java.text.Normalizer.normalize(x.lowercase(), java.text.Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
 
-        // búsqueda en vivo (con una pequeña espera para no recalcular en cada letra)
+    private fun buildSearch(): View = page("Buscar", "Todos los ajustes del launcher", false) { c ->
+        val sk = card(c, dp(8f).toInt())
+        val search = android.widget.EditText(this)
+        search.hint = "Escribe: sombra, dock, reloj, rebote…"
+        search.setHintTextColor(0x99FFFFFF.toInt())
+        search.setTextColor(Color.WHITE)
+        search.textSize = 16f
+        search.isSingleLine = true
+        search.background = null
+        search.setPadding(dp(16f).toInt(), dp(10f).toInt(), dp(16f).toInt(), dp(10f).toInt())
+        search.setCompoundDrawablesRelative(GlyphDrawable(Glyphs.SEARCH, 20f, 0xCCFFFFFF.toInt()), null, null, null)
+        search.compoundDrawablePadding = dp(12f).toInt()
+        sk.addView(search)
+        val results = LinearLayout(this)
+        results.orientation = LinearLayout.VERTICAL
+        c.addView(results)
+        search.postDelayed({
+            search.requestFocus()
+            (getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager)
+                .showSoftInput(search, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+        }, 450)
         val h = android.os.Handler(android.os.Looper.getMainLooper())
         var pending: Runnable? = null
         search.addTextChangedListener(object : android.text.TextWatcher {
@@ -565,21 +609,28 @@ class SettingsActivity : Activity() {
                 val q = norm(e?.toString()?.trim() ?: "")
                 val r = Runnable {
                     results.removeAllViews()
-                    if (q.length < 2) {
-                        cats.visibility = View.VISIBLE
-                        return@Runnable
-                    }
-                    cats.visibility = View.GONE
+                    if (q.length < 2) return@Runnable
                     val words = q.split(' ').filter { it.isNotEmpty() }
-                    val found = S.defs.filter { d ->
-                        val hay = norm(d.title + " " + d.group + " " + S.CATS[d.cat])
-                        words.all { hay.contains(it) }
+                    val found = ArrayList<Pair<Menus.Sec, Int>>()
+                    for (sec in Menus.all()) for (id in sec.ids) {
+                        val d = S.defs[id]
+                        val hay = norm(d.title + " " + sec.title + " " + sec.header + " " + CAT_TITLES[sec.menu])
+                        if (words.all { hay.contains(it) }) found.add(Pair(sec, id))
                     }
                     results.addView(text(found.size.toString() + " resultados", 13.5f, 500, OneColors.SUB).apply { setPadding(dp(20f).toInt(), dp(16f).toInt(), 0, 0) })
-                    val k = card(results)
-                    for ((n, d) in found.take(60).withIndex()) {
-                        if (n > 0) divider(k, 0f)
-                        item(k, d, true)
+                    var last: Menus.Sec? = null
+                    var k: LinearLayout? = null
+                    var n = 0
+                    for ((sec, id) in found.take(60)) {
+                        if (sec !== last) {
+                            last = sec
+                            sectionLabel(results, CAT_TITLES[sec.menu] + "  ›  " + sec.title)
+                            k = card(results)
+                            n = 0
+                        }
+                        val kk = k ?: continue
+                        if (n++ > 0) divider(kk, 0f)
+                        item(kk, S.defs[id], false)
                     }
                     if (found.size > 60) results.addView(text("Mostrando 60. Escribe más para afinar.", 13f, 400, OneColors.SUB).apply { setPadding(dp(20f).toInt(), dp(10f).toInt(), 0, 0) })
                 }
@@ -607,46 +658,6 @@ class SettingsActivity : Activity() {
         ch.background = GlyphDrawable(Glyphs.CHEVRON, 18f, 0x80FFFFFF.toInt())
         row.addView(ch, LinearLayout.LayoutParams(dp(18f).toInt(), dp(18f).toInt()))
         parent.addView(row)
-    }
-
-    /** categoría: lista de grupos (o los ajustes directamente si es un solo grupo) */
-    private fun buildAdvCat(ci: Int): View = page(S.CATS[ci], S.CAT_SUB[ci], false) { c ->
-        val groups = LinkedHashMap<String, Int>()
-        for (d in S.defs) if (d.cat == ci) groups[d.group] = (groups[d.group] ?: 0) + 1
-        if (groups.size == 1) {
-            val k = card(c)
-            for ((n, d) in S.defs.filter { it.cat == ci }.withIndex()) {
-                if (n > 0) divider(k, 0f)
-                item(k, d, false)
-            }
-        } else {
-            val k = card(c, dp(6f).toInt())
-            var n = 0
-            for ((g, cnt) in groups) {
-                if (n++ > 0) divider(k, dp(72f))
-                advRow(k, S.CAT_GLYPH[ci], S.CAT_COLOR[ci], g, cnt.toString() + " ajustes") { push(buildAdvGroup(ci, g)) }
-            }
-        }
-        val rk = card(c, dp(6f).toInt())
-        button(rk, "Restablecer " + S.CATS[ci].lowercase(), "Solo esta categoría", Glyphs.BACK) {
-            S.reset(ci)
-            toast("Restablecido")
-            pop()
-        }
-    }
-
-    private fun buildAdvGroup(ci: Int, g: String): View = page(g, S.CATS[ci], false) { c ->
-        val k = card(c)
-        for ((n, d) in S.defs.filter { it.cat == ci && it.group == g }.withIndex()) {
-            if (n > 0) divider(k, 0f)
-            item(k, d, false)
-        }
-        val rk = card(c, dp(6f).toInt())
-        button(rk, "Restablecer este grupo", null, Glyphs.BACK) {
-            S.reset(ci, g)
-            toast("Restablecido")
-            pop()
-        }
     }
 
     /** fila de un ajuste según su tipo */
@@ -934,7 +945,8 @@ class SettingsActivity : Activity() {
         texts.orientation = LinearLayout.VERTICAL
         texts.setPadding(dp(16f).toInt(), 0, dp(8f).toInt(), 0)
         texts.addView(text(CAT_TITLES[i], 17f, 500))
-        val sub = text(CAT_SUBS[i], 13.5f, 400, OneColors.SUB)
+        val n = Menus.countFor(i)
+        val sub = text(CAT_SUBS[i] + (if (n > 0) " · $n ajustes" else ""), 13.5f, 400, OneColors.SUB)
         sub.setPadding(0, dp(2f).toInt(), 0, 0)
         texts.addView(sub)
         row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))

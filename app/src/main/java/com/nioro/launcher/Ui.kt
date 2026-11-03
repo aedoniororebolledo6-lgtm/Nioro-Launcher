@@ -30,7 +30,8 @@ object OneColors {
         0xFFFF4D8D.toInt(), // recientes
         0xFFB45CFF.toInt(), // apariencia
         0xFF2FC26B.toInt(), // batería
-        0xFF8A94A6.toInt()  // acerca de
+        0xFF8A94A6.toInt(), // acerca de
+        0xFFFFB020.toInt()  // gestos y vibración
     )
 }
 
