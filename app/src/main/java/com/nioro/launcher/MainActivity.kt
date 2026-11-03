@@ -50,7 +50,6 @@ class MainActivity : Activity() {
         Prefs.init(this)
         Compat.edgeToEdge(this)
         Compat.applyRefreshRate(this)
-        }
 
         root = FrameLayout(this)
         home = HomeView(this)
@@ -76,6 +75,7 @@ class MainActivity : Activity() {
                 root.removeCallbacks(calmDown)
                 root.postDelayed(calmDown, 1200)
             }
+        }
 
         root.setOnApplyWindowInsetsListener { _, ins ->
             val (top, bottom) = Compat.bars(ins)
