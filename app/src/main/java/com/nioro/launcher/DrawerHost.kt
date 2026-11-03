@@ -151,7 +151,7 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
             visibility = VISIBLE
             v.progress = 0f
             sp.snap(0f)
-            v.post { v.onOpen() }
+            v.post { if (isOpen && view === v) v.onOpen() }
             if (Prefs.drawerStyle == 4) sp.tune(140f, 1f) else sp.tune(230f, 0.82f)
         }
         sp.to(1f)

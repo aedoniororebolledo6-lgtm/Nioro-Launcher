@@ -325,6 +325,13 @@ object Recents {
     private val session = ArrayList<String>()
     private var loaded = false
 
+    @Synchronized
+    private fun snapshot(): List<String> {
+        ensure()
+        return ArrayList(session)
+    }
+
+    @Synchronized
     private fun ensure() {
         if (!loaded) {
             loaded = true
@@ -379,9 +386,8 @@ object Recents {
         return res
     }
 
-    @Synchronized
     fun list(ctx: Context): List<AppEntry> {
-        ensure()
+        val sess = snapshot()
         val out = ArrayList<AppEntry>()
         val seen = HashSet<String>()
         val hidden = Prefs.hidden()
@@ -391,7 +397,7 @@ object Recents {
             if (e.key in hidden) continue
             if (seen.add(e.pkg)) out.add(e)
         }
-        for (k in session) {
+        for (k in sess) {
             val e = AppRepo.get(k) ?: continue
             if (seen.add(e.pkg)) out.add(e)
         }
@@ -399,15 +405,14 @@ object Recents {
     }
 
     /** Apps usadas en los últimos 30 min: se marcan con un puntito bajo el icono del dock. */
-    @Synchronized
     fun recentPackages(ctx: Context): Set<String> {
-        ensure()
+        val sess = snapshot()
         val out = HashSet<String>()
         val now = System.currentTimeMillis()
         for ((pkg, t) in usagePackages(ctx)) if (now - t < 30L * 60_000L) out.add(pkg)
         if (out.isEmpty()) {
-            for (i in 0 until minOf(4, session.size)) {
-                val e = AppRepo.get(session[i]) ?: continue
+            for (i in 0 until minOf(4, sess.size)) {
+                val e = AppRepo.get(sess[i]) ?: continue
                 out.add(e.pkg)
             }
         }

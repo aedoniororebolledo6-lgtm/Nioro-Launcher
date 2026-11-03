@@ -166,7 +166,7 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
 
     override fun onSensorChanged(ev: SensorEvent) {
         val gx = -ev.values[0] * 1.8f
-        val gy = (ev.values[1] * 1.8f).coerceIn(-6f, 28f)
+        val gy = (ev.values[1] * 1.8f).coerceIn(4f, 28f)
         if (abs(gx - grav.x) + abs(gy - grav.y) > 0.6f) {
             grav.set(gx, gy)
             world?.gravity = Vec2(gx, gy)

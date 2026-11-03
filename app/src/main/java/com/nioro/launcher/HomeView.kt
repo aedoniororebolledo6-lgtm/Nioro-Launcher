@@ -875,7 +875,10 @@ class HomeView(ctx: Context) : View(ctx) {
             if (y < insetTop + dp(80f)) {
                 homeKeys.remove(key)
             } else if (y > dockTopY() - dp(4f)) {
-                if (key !in dockKeys && dockKeys.size < 5) dockKeys.add(key)
+                if (key !in dockKeys && dockKeys.size < 5) {
+                    dockKeys.add(key)
+                    homeKeys.remove(key)
+                }
             } else {
                 val to = dropIndex(x, y)
                 val from = homeKeys.indexOf(key)

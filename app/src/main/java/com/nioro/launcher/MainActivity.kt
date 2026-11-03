@@ -36,7 +36,7 @@ class MainActivity : Activity() {
     private var recentsP = 0f
     private var resumed = false
     private var wasStopped = false
-    private val overlayGuard = Runnable { if (resumed && overlay.active) overlay.hide() }
+    private val overlayGuard = Runnable { if (overlay.active) overlay.hide() }
 
     private val pkgReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
@@ -161,6 +161,9 @@ class MainActivity : Activity() {
         home.pauseClock()
         menu.dismiss()
         overlay.hide()
+        // nada de animaciones ni sensores mientras el launcher no se ve
+        if (drawer.isOpen) drawer.closeNow()
+        if (recents.isOpen) recents.closeNow()
         super.onStop()
     }
 

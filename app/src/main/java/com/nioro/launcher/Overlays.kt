@@ -53,14 +53,17 @@ class OpenOverlay(ctx: Context) : View(ctx) {
 
     init {
         ticker.add(sp)
-        visibility = GONE
+        visibility = INVISIBLE
     }
 
     fun start(e: AppEntry, src: RectF, styleIdx: Int, launch: () -> Unit) {
         entry = e
         style = styleIdx
         from.set(src)
-        to.set(0f, 0f, width.toFloat(), height.toFloat())
+        val root = parent as? View
+        val w = if (width > 0) width else root?.width ?: resources.displayMetrics.widthPixels
+        val h = if (height > 0) height else root?.height ?: resources.displayMetrics.heightPixels
+        to.set(0f, 0f, w.toFloat(), h.toFloat())
         fired = false
         onLaunch = launch
         active = true
@@ -75,7 +78,7 @@ class OpenOverlay(ctx: Context) : View(ctx) {
     fun hide() {
         active = false
         ticker.stop()
-        visibility = GONE
+        visibility = INVISIBLE
         entry = null
         onLaunch = null
     }
@@ -159,19 +162,21 @@ class MenuView(ctx: Context) : View(ctx) {
         sep.color = 0x30FFFFFF
         hi.color = 0x30FFFFFF
         scrim.color = Color.BLACK
-        visibility = GONE
+        visibility = INVISIBLE
     }
 
     fun show(t: String, a: RectF, list: List<Item>) {
         title = t
         items = list
         anchor.set(a)
-        val w = dp(240f)
+        val vw = (if (width > 0) width else resources.displayMetrics.widthPixels).toFloat()
+        val vh = (if (height > 0) height else resources.displayMetrics.heightPixels).toFloat()
+        val w = min(dp(240f), vw - dp(24f))
         val h = headH + rowH * list.size
         var left = a.centerX() - w / 2f
-        left = left.coerceIn(dp(12f), width - w - dp(12f))
+        left = left.coerceIn(dp(12f), max(dp(12f), vw - w - dp(12f)))
         above = a.top - h - dp(12f) > dp(40f)
-        val top = if (above) a.top - h - dp(10f) else min(a.bottom + dp(10f), height - h - dp(12f))
+        val top = if (above) a.top - h - dp(10f) else max(dp(12f), min(a.bottom + dp(10f), vh - h - dp(12f)))
         box.set(left, top, left + w, top + h)
         pressed = -1
         showing = true
@@ -186,7 +191,7 @@ class MenuView(ctx: Context) : View(ctx) {
         showing = false
         sp.to(0f)
         ticker.kick()
-        postDelayed({ if (!showing) visibility = GONE }, 260)
+        postDelayed({ if (!showing) visibility = INVISIBLE }, 260)
     }
 
     override fun onDraw(c: Canvas) {
