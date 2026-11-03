@@ -9,7 +9,8 @@ El dueño habla **español**: responde siempre en español, claro y sin tecnicis
   sin publicar nada. Revisa el resultado con las herramientas `mcp__github__actions_*`
   (y `get_job_logs` si falla). Espera en segundo plano, no con `sleep` en primer plano.
 - No hay pruebas unitarias ni capturas automáticas todavía: revisa a mano la lógica que cambies.
-- Si el usuario manda capturas de su teléfono (Samsung S21) en el chat, úsalas para comprobar.
+- Si el usuario manda capturas de sus teléfonos (Samsung S21 y Redmi Note 9 Pro con MIUI) en el chat, úsalas para comprobar.
+- Ideas y repositorios de referencia para diseñar: `docs/referencias-diseno.md`.
 
 ## Publicar una actualización
 El usuario quiere que **las actualizaciones le lleguen solas**. El flujo:
@@ -39,5 +40,7 @@ El usuario quiere que **las actualizaciones le lleguen solas**. El flujo:
 ## Reglas de la casa
 - Toda vibración pasa por `Hx.fire(view, S.HE_*)` (o `Hx.gesture`): nunca `performHapticFeedback` directo,
   así respeta los ajustes de Vibración.
+- Un panel cerrado o casi invisible no debe recibir toques (ver `dispatchTouchEvent` en `DrawerHost.kt`):
+  si no, aparecen "apps fantasma" al tocar el inicio.
 - Cero trabajo en reposo: anima con `Ticker`/`SpringValue` y deja que se detenga solo.
 - Nada de asignaciones en `onDraw` si se puede evitar (reutiliza `RectF`, `Paint`, shaders).

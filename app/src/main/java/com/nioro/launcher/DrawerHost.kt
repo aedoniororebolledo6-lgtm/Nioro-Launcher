@@ -12,6 +12,7 @@ import android.text.InputType
 import android.text.TextWatcher
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
@@ -215,6 +216,32 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
         ticker.kick()
     }
 
+    /**
+     * Seguridad contra "apps fantasma": cerrada o aún invisible, nunca recibe toques
+     * (si no, tocar el inicio abriría apps que no se ven).
+     */
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (!isOpen) {
+            // cerrada pero aún visible y quieta: se termina de cerrar
+            if (ev.actionMasked == MotionEvent.ACTION_DOWN && !sp.active) finishClose()
+            return false
+        }
+        if (sp.value < 0.25f) {
+            // se está abriendo; si el resorte se quedó parado, se reanuda
+            if (ev.actionMasked == MotionEvent.ACTION_DOWN && !sp.active) {
+                sp.to(1f)
+                ticker.kick()
+            }
+            return true
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
+    /** Si quedó visible estando cerrada (p. ej. tras pausar el launcher), se oculta del todo. */
+    fun sanitize() {
+        if (!isOpen && visibility == VISIBLE && !sp.active) finishClose()
+    }
+
     fun close() {
         if (!isOpen) return
         isOpen = false
@@ -309,6 +336,32 @@ class RecentsHost(ctx: Context) : FrameLayout(ctx) {
         Hx.fire(this, S.HE_PANEL)
         sp.to(1f)
         ticker.kick()
+    }
+
+    /**
+     * Seguridad contra "apps fantasma": cerrada o aún invisible, nunca recibe toques
+     * (si no, tocar el inicio abriría apps que no se ven).
+     */
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (!isOpen) {
+            // cerrada pero aún visible y quieta: se termina de cerrar
+            if (ev.actionMasked == MotionEvent.ACTION_DOWN && !sp.active) closeNow()
+            return false
+        }
+        if (sp.value < 0.25f) {
+            // se está abriendo; si el resorte se quedó parado, se reanuda
+            if (ev.actionMasked == MotionEvent.ACTION_DOWN && !sp.active) {
+                sp.to(1f)
+                ticker.kick()
+            }
+            return true
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
+    /** Si quedó visible estando cerrada (p. ej. tras pausar el launcher), se oculta del todo. */
+    fun sanitize() {
+        if (!isOpen && visibility == VISIBLE && !sp.active) closeNow()
     }
 
     fun close() {

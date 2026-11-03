@@ -167,6 +167,8 @@ class MainActivity : Activity() {
         overlay.hide()
         Compat.applyRefreshRate(this)
         home.resumeClock()
+        drawer.sanitize()
+        recents.sanitize()
         drawer.styleChanged()
         if (wasStopped) {
             // Al volver (de una app, de Ajustes o al desbloquear) se releen los ajustes.
