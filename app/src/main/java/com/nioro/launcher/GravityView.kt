@@ -27,6 +27,8 @@ import kotlin.math.min
  * Cuando todo se duerme el bucle se detiene y no gasta batería.
  */
 class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
+    override val iconArea = S.IA_GRAVITY
+
 
     private class Ball(val e: AppEntry, val body: Body, val r: Float)
 
@@ -93,6 +95,7 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
         val h = height.toFloat()
         if (w <= 0f || h <= 0f) return
         destroy()
+        grav.set(0f, 18f * S.p(S.GRAV_G))
         val wd = World(Vec2(grav.x, grav.y))
         wd.setAllowSleep(true)
         world = wd
@@ -117,11 +120,11 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
         wall(-1f, floor / 2f - 40f, 1f, floor / 2f + 60f) // pared izquierda
         wall(wm + 1f, floor / 2f - 40f, 1f, floor / 2f + 60f) // pared derecha
 
-        val r = dp(Prefs.iconDp.toFloat() * 0.5f - 1f) / ppm
+        val r = dp(Prefs.iconDp.toFloat() * 0.5f - 1f) * S.p(S.GRAV_SIZE) / ppm
         val perRow = (wm / (r * 2.2f)).toInt().coerceAtLeast(2)
         // solo las esferas que caben en pantalla (el resto se encuentra con la búsqueda)
         val fitRows = ((floor - topWall) / (r * 2f * 0.95f)).toInt().coerceAtLeast(1)
-        val cap = min(maxBalls, perRow * fitRows)
+        val cap = min(S.i(S.GRAV_MAX), perRow * fitRows)
         val list = if (shown.size > cap) shown.subList(0, cap) else shown
         for ((i, e) in list.withIndex()) {
             val col = i % perRow
@@ -142,8 +145,8 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
             val fd = FixtureDef()
             fd.shape = sh
             fd.density = 1f
-            fd.friction = 0.3f
-            fd.restitution = 0.38f
+            fd.friction = S.p(S.GRAV_FRICTION)
+            fd.restitution = S.p(S.GRAV_BOUNCE)
             b.createFixture(fd)
             balls.add(Ball(e, b, r))
         }
@@ -166,8 +169,10 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 
     override fun onSensorChanged(ev: SensorEvent) {
-        val gx = -ev.values[0] * 1.8f
-        val gy = (ev.values[1] * 1.8f).coerceIn(4f, 28f)
+        val sens = 1.8f * S.p(S.GRAV_TILT)
+        val g = S.p(S.GRAV_G)
+        val gx = -ev.values[0] * sens * g
+        val gy = (ev.values[1] * sens * g).coerceIn(4f * g, 28f * g)
         if (abs(gx - grav.x) + abs(gy - grav.y) > 0.6f) {
             grav.set(gx, gy)
             world?.gravity = Vec2(gx, gy)
@@ -191,7 +196,8 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
                 val tx = dragX / ppm
                 val ty = dragY / ppm
                 d.body.isAwake = true
-                d.body.setLinearVelocity(Vec2((tx - p.x) * 16f, (ty - p.y) * 16f))
+                val th = 16f * S.p(S.GRAV_THROW)
+                d.body.setLinearVelocity(Vec2((tx - p.x) * th, (ty - p.y) * th))
                 d.body.angularVelocity = d.body.angularVelocity * 0.9f
             }
             wd.step(1f / 60f, 6, 2)
@@ -257,7 +263,7 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
                 downBall = hit(x, y)
                 uiHandler.removeCallbacks(longRun)
                 unpress()
-                if (downBall != null) uiHandler.postDelayed(longRun, 420L)
+                if (downBall != null) uiHandler.postDelayed(longRun, longMs)
                 press(downBall?.e)
                 return true
             }
@@ -292,7 +298,7 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
                     } else {
                         listener?.onClose()
                     }
-                } else if (moved && downBall == null && up && y - downY > dp(110f)) {
+                } else if (moved && downBall == null && up && y - downY > dp(110f) && S.b(S.DR_SWIPE_CLOSE)) {
                     listener?.onClose()
                 }
                 downBall = null

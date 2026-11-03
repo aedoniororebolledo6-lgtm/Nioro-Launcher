@@ -83,6 +83,8 @@ object Prefs {
     fun setDockKeys(v: List<String>) = putList("dockKeys", v)
     fun hidden(): MutableList<String> = getList("hidden")
     fun setHidden(v: List<String>) = putList("hidden", v)
+    fun knownKeys(): MutableList<String> = getList("knownKeys")
+    fun setKnownKeys(v: List<String>) = putList("knownKeys", v)
     fun recentKeys(): MutableList<String> = getList("recentKeys")
     fun setRecentKeys(v: List<String>) = putList("recentKeys", v)
 

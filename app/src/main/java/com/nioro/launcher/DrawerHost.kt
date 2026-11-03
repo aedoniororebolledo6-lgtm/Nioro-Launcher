@@ -154,11 +154,30 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
             addView(search)
         }
         view = v
-        v.setData(AppRepo.visible())
+        v.setData(AppRepo.sorted(AppRepo.visible()), AppRepo.sorted(AppRepo.apps))
     }
 
     fun refreshData() {
-        view?.setData(AppRepo.visible())
+        view?.setData(AppRepo.sorted(AppRepo.visible()), AppRepo.sorted(AppRepo.apps))
+    }
+
+    /** abre la vista con el teclado listo para buscar */
+    fun showKeyboard() {
+        search.requestFocus()
+        search.post {
+            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.showSoftInput(search, InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+
+    private fun rebuildScrim() {
+        val c = S.col(S.L_SCRIM, 0xFF060A18.toInt()) and 0x00FFFFFF
+        val h = height.toFloat().coerceAtLeast(1f)
+        scrimShader = LinearGradient(
+            0f, 0f, 0f, h,
+            intArrayOf(c or 0xB3000000.toInt(), c or 0x8C000000.toInt(), c or 0xCC000000.toInt()),
+            floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP
+        )
     }
 
     /** Llamar cuando cambian los ajustes (estilo de vista, tamaños...). */
@@ -182,7 +201,14 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
             v.progress = 0f
             sp.snap(0f)
             v.post { if (isOpen && view === v) v.onOpen() }
-            if (Prefs.drawerStyle == 4) sp.tune(140f, 1f) else sp.tune(230f, 0.82f)
+            if (Prefs.drawerStyle == 4) Mo.tune(sp, S.MO_DRAWER_OPEN, 140f, 1f) else Mo.tune(sp, S.MO_DRAWER_OPEN, 230f, 0.82f)
+            search.visibility = if (S.b(S.DR_SEARCH)) View.VISIBLE else View.GONE
+            search.textSize = 16f * S.p(S.tp(S.TX_SEARCH, S.TP_SIZE))
+            search.setTextColor(S.col(S.tp(S.TX_SEARCH, S.TP_COLOR), Color.WHITE))
+            search.background = GlassDrawable(22f, 1f, S.SF_SEARCH)
+            rebuildScrim()
+            Hx.fire(this, S.HE_PANEL)
+            if (S.b(S.DR_KEYBOARD) && S.b(S.DR_SEARCH)) showKeyboard()
         }
         sp.to(1f)
         ticker.kick()
@@ -193,7 +219,7 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
         isOpen = false
         hideKeyboard()
         search.clearFocus()
-        sp.tune(260f, 1f)
+        Mo.tune(sp, S.MO_DRAWER_CLOSE, 260f, 1f)
         sp.to(0f)
         ticker.kick()
     }
@@ -250,7 +276,7 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
     override fun onDraw(c: Canvas) {
         val a = clamp01(sp.value)
         scrim.shader = scrimShader
-        scrim.alpha = (255 * a * (if (Prefs.drawerStyle == 1 || Prefs.drawerStyle == 2) 0.75f else 1f)).toInt()
+        scrim.alpha = (255 * a * S.p(S.DR_DIM) * (if (Prefs.drawerStyle == 1 || Prefs.drawerStyle == 2) 0.75f else 1f)).toInt().coerceIn(0, 255)
         c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), scrim)
     }
 
@@ -282,7 +308,8 @@ class RecentsHost(ctx: Context) : FrameLayout(ctx) {
         view.setItems(items)
         isOpen = true
         visibility = VISIBLE
-        if (Prefs.recentsAnim == 0) sp.tune(240f, 0.85f) else sp.tune(200f, 0.75f)
+        if (Prefs.recentsAnim == 0) Mo.tune(sp, S.MO_RECENTS_OPEN, 240f, 0.85f) else Mo.tune(sp, S.MO_RECENTS_OPEN, 200f, 0.75f)
+        Hx.fire(this, S.HE_PANEL)
         sp.to(1f)
         ticker.kick()
     }
@@ -290,7 +317,7 @@ class RecentsHost(ctx: Context) : FrameLayout(ctx) {
     fun close() {
         if (!isOpen) return
         isOpen = false
-        sp.tune(280f, 1f)
+        Mo.tune(sp, S.MO_RECENTS_CLOSE, 280f, 1f)
         sp.to(0f)
         ticker.kick()
     }
@@ -315,7 +342,7 @@ class RecentsHost(ctx: Context) : FrameLayout(ctx) {
     }
 
     override fun onDraw(c: Canvas) {
-        scrim.alpha = (170 * clamp01(sp.value)).toInt()
+        scrim.alpha = (170 * clamp01(sp.value) * S.p(S.RC_DIM)).toInt().coerceIn(0, 255)
         c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), scrim)
     }
 

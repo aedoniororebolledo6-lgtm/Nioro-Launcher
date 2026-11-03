@@ -15,13 +15,13 @@ import kotlin.math.max
 import kotlin.math.min
 
 /** Drawable de cristal para vistas normales (barra de búsqueda, tarjetas de Ajustes). */
-class GlassDrawable(private val radiusDp: Float, private val alphaK: Float = 1f) : Drawable() {
+class GlassDrawable(private val radiusDp: Float, private val alphaK: Float = 1f, private val surf: Int = -1) : Drawable() {
     private val g = Glass()
     private val r = RectF()
     override fun draw(c: Canvas) {
         val b = bounds
         r.set(b.left + dp(2f), b.top + dp(2f), b.right - dp(2f), b.bottom - dp(2f))
-        g.draw(c, r, dp(radiusDp), alphaK, false)
+        g.draw(c, r, dp(radiusDp), alphaK, false, surf)
     }
     override fun setAlpha(alpha: Int) {}
     override fun setColorFilter(colorFilter: ColorFilter?) {}
@@ -88,7 +88,7 @@ class OpenOverlay(ctx: Context) : View(ctx) {
         val p = sp.value
         // Se lanza cuando la ventana ya cubre casi toda la pantalla.
         // Se lanza pronto: la ventana de la app aparece mientras la animación sigue (menos espera).
-        val fireAt = if (style == 4) 0.4f else 0.5f
+        val fireAt = Motion.openFireAt(style)
         if (!fired && (p >= fireAt || !sp.active)) {
             fired = true
             onLaunch?.invoke()
@@ -152,7 +152,7 @@ class MenuView(ctx: Context) : View(ctx) {
     private var title = ""
     private var pressed = -1
     private var above = true
-    private val rowH get() = dp(50f)
+    private val rowH get() = dp(S.f(S.M_ROW))
     private val headH get() = dp(46f)
     var showing = false
         private set
@@ -173,7 +173,7 @@ class MenuView(ctx: Context) : View(ctx) {
         anchor.set(a)
         val vw = (if (width > 0) width else resources.displayMetrics.widthPixels).toFloat()
         val vh = (if (height > 0) height else resources.displayMetrics.heightPixels).toFloat()
-        val w = min(dp(240f), vw - dp(24f))
+        val w = min(dp(S.f(S.M_WIDTH)), vw - dp(24f))
         val h = headH + rowH * list.size
         var left = a.centerX() - w / 2f
         left = left.coerceIn(dp(12f), max(dp(12f), vw - w - dp(12f)))
@@ -183,6 +183,8 @@ class MenuView(ctx: Context) : View(ctx) {
         pressed = -1
         showing = true
         visibility = VISIBLE
+        Tx.apply(text, S.TX_MENU, dp(16f), 400, 0f, 0)
+        Mo.tune(sp, S.MO_MENU, 340f, 0.6f)
         sp.snap(0f)
         sp.to(1f)
         ticker.kick()
@@ -199,24 +201,25 @@ class MenuView(ctx: Context) : View(ctx) {
     override fun onDraw(c: Canvas) {
         val p = sp.value
         val a = clamp01(p)
-        scrim.alpha = (70 * a).toInt()
+        scrim.alpha = (70 * a * S.p(S.M_DIM)).toInt().coerceIn(0, 255)
         c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), scrim)
         val s = lerp(0.6f, 1f, p)
         val py = if (above) box.bottom else box.top
         c.save()
         c.scale(s, s, anchor.centerX().coerceIn(box.left, box.right), py)
-        glass.draw(c, box, dp(24f), a)
-        text.alpha = (170 * a).toInt()
-        text.textSize = dp(13.5f)
-        c.drawText(title, box.left + dp(20f), box.top + dp(29f), text)
-        text.textSize = dp(16f)
+        glass.draw(c, box, dp(24f), a, true, S.SF_MENU)
+        val base = text.textSize
+        text.alpha = Tx.alpha(S.TX_MENU, a * 0.67f)
+        text.textSize = base * 0.85f
+        c.drawText(Tx.str(S.TX_MENU, title), box.left + dp(20f), box.top + dp(29f), text)
+        text.textSize = base
         for (i in items.indices) {
             val top = box.top + headH + i * rowH
             if (i == pressed) c.drawRect(box.left + dp(6f), top, box.right - dp(6f), top + rowH, hi)
             sep.alpha = (48 * a).toInt()
             c.drawLine(box.left + dp(16f), top, box.right - dp(16f), top, sep)
-            text.alpha = (255 * a).toInt()
-            c.drawText(items[i].label, box.left + dp(20f), top + rowH / 2f + dp(6f), text)
+            text.alpha = Tx.alpha(S.TX_MENU, a)
+            c.drawText(Tx.str(S.TX_MENU, items[i].label), box.left + dp(20f), top + rowH / 2f + dp(6f) + Tx.dy(S.TX_MENU), text)
         }
         c.restore()
     }
@@ -287,7 +290,7 @@ class BackdropView(ctx: Context) : View(ctx) {
         val w = src.width
         val h = src.height
         if (w <= 0 || h <= 0) return
-        val s = 6
+        val s = intArrayOf(8, 6, 4)[S.i(S.P_BLUR_Q).coerceIn(0, 2)]
         try {
             val b = android.graphics.Bitmap.createBitmap(max(1, w / s), max(1, h / s), android.graphics.Bitmap.Config.ARGB_8888)
             val c = Canvas(b)

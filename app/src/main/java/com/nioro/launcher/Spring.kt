@@ -236,7 +236,7 @@ class Scroll1D(ticker: Ticker) : Stepper {
     fun release(vel: Float) {
         val v = sp.value
         if (v < min || v > max) {
-            sp.tune(170f, 1f)
+            Mo.tune(sp, S.MO_SCROLL, 170f, 1f)
             sp.to(if (v < min) min else max)
             sp.velocity = vel * 0.5f
             flinging = false
@@ -262,7 +262,7 @@ class Scroll1D(ticker: Ticker) : Stepper {
             if (nv < min || nv > max) {
                 // choca con el borde: rebota con resorte conservando la velocidad
                 sp.value = nv
-                sp.tune(170f, 0.9f)
+                Mo.tune(sp, S.MO_SCROLL, 170f, 0.9f)
                 sp.to(if (nv < min) min else max)
                 sp.velocity = flingV * 0.6f
                 flinging = false

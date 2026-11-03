@@ -215,9 +215,10 @@ class OneSwitch(ctx: Context) : View(ctx) {
     fun set(v: Boolean, user: Boolean = false) {
         checked = v
         if (user) {
+            Mo.tune(sp, S.MO_CONTROLS, 520f, 0.75f)
             sp.to(if (v) 1f else 0f)
             ticker.kick()
-            performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            Hx.fire(this, S.HE_SETTING)
             onChange?.invoke(v)
         } else {
             sp.snap(if (v) 1f else 0f)
@@ -312,7 +313,7 @@ class OneSlider(ctx: Context, private val min: Int, private val max: Int, start:
                 val v = Math.round(min + f * (max - min))
                 if (v != value) {
                     value = v
-                    if (max - min <= 20) performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    if (max - min <= 40) Hx.fire(this, S.HE_SETTING)
                     onChange?.invoke(v)
                 }
                 invalidate()

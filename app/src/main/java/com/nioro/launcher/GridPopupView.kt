@@ -20,6 +20,8 @@ import kotlin.math.min
  * con una rejilla de iconos que se desplaza verticalmente.
  */
 class GridPopupView(ctx: Context) : AppsView(ctx) {
+    override val iconArea = S.IA_GRID
+
 
     private val scroll = Scroll1D(ticker)
     private val panel = RectF()
@@ -71,7 +73,7 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
         iconSize = min(iconSize, cellW - dp(14f)).coerceAtLeast(dp(30f))
         cellH = iconSize + dp(40f)
         val bottom = h - insetBottom - dp(96f) - dp(14f)
-        val maxH = min(h * 0.66f, h - insetTop - dp(160f))
+        val maxH = min(h * S.p(S.GRID_H), h - insetTop - dp(160f))
         val rowsAll = ceil(shown.size / cols.toFloat()).toInt()
         val wanted = dp(66f) + rowsAll * cellH + dp(10f)
         val ph = min(maxH, max(dp(220f), wanted))
@@ -119,7 +121,7 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
         val pivotY = panel.bottom + dp(14f)
         c.save()
         c.scale(s, s, ax, pivotY)
-        glass.draw(c, panel, dp(30f), a)
+        glass.draw(c, panel, dp(30f), a, true, S.SF_GRIDPANEL)
         // pico que apunta al dock
         nubPath.reset()
         nubPath.moveTo(ax - dp(14f), panel.bottom - dp(1f))
@@ -127,9 +129,9 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
         nubPath.lineTo(ax, panel.bottom + dp(12f))
         nubPath.close()
         nub.alpha = (70 * a).toInt()
-        c.drawPath(nubPath, nub)
+        if (S.b(S.GRID_NUB)) c.drawPath(nubPath, nub)
         title.alpha = (255 * a).toInt().coerceIn(0, 255)
-        c.drawText("Aplicaciones", panel.left + dp(22f), panel.top + dp(36f), title)
+        if (S.b(S.GRID_TITLE)) c.drawText("Aplicaciones", panel.left + dp(22f), panel.top + dp(36f), title)
 
         c.save()
         c.clipRect(panel.left + dp(4f), areaTop, panel.right - dp(4f), areaBottom)
@@ -178,7 +180,7 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
                 downIdx = idxAt(x, y)
                 uiHandler.removeCallbacks(longRun)
                 unpress()
-                if (downIdx >= 0) uiHandler.postDelayed(longRun, 380L)
+                if (downIdx >= 0) uiHandler.postDelayed(longRun, longMs)
                 if (downIdx >= 0) press(shown[downIdx])
                 return true
             }

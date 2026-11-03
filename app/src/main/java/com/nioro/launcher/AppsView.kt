@@ -45,20 +45,25 @@ abstract class AppsView(ctx: Context) : View(ctx) {
     protected val dst = RectF()
     private val labelCache = HashMap<String, String>()
     protected val pressSp: SpringValue = ticker.add(SpringValue(1f, 700f, 53f, 0.0005f))
+    /** zona de iconos de esta vista (S.IA_*) para sus ajustes propios */
+    abstract val iconArea: Int
+    protected val longMs: Long get() = S.f(S.G_ICON_LONG_MS).toLong()
+    private var allApps: List<AppEntry> = emptyList()
     private var pressKey: String? = null
 
     /** El icono tocado se "hunde" con un resorte rápido y vuelve con un rebote suave. */
     protected fun press(e: AppEntry?) {
         if (e == null) return
         pressKey = e.key
-        pressSp.tune(700f, 1f)
-        pressSp.to(0.86f)
+        Mo.tune(pressSp, S.MO_PRESS, 700f, 1f)
+        pressSp.to(1f - IconFx.pressDepth(iconArea))
+        Hx.fire(this, S.HE_ICON)
         ticker.kick()
     }
 
     protected fun unpress() {
         if (pressKey == null && pressSp.target >= 1f) return
-        pressSp.tune(420f, 0.5f)
+        Mo.tune(pressSp, S.MO_RELEASE, 420f, IconFx.releaseRatio(iconArea))
         pressSp.to(1f)
         ticker.kick()
     }
@@ -71,9 +76,10 @@ abstract class AppsView(ctx: Context) : View(ctx) {
         textPaint.setShadowLayer(dp(3f), 0f, dp(1f), 0x99000000.toInt())
     }
 
-    open fun setData(list: List<AppEntry>) {
-        textPaint.textSize = dp(Prefs.labelSize.toFloat())
+    open fun setData(list: List<AppEntry>, all: List<AppEntry> = list) {
+        Tx.apply(textPaint, S.TX_LABEL_DRAWER, dp(Prefs.labelSize.toFloat()), 400, dp(3f), 0x99)
         apps = list
+        allApps = all
         refilter()
     }
 
@@ -83,7 +89,11 @@ abstract class AppsView(ctx: Context) : View(ctx) {
     }
 
     private fun refilter() {
-        shown = if (queryText.isEmpty()) apps else apps.filter { it.label.lowercase().contains(queryText) }
+        shown = if (queryText.isEmpty()) apps else {
+            val src = if (S.b(S.DR_HIDDEN_SEARCH)) allApps else apps
+            val pkg = S.b(S.DR_PKG)
+            src.filter { it.label.lowercase().contains(queryText) || (pkg && it.pkg.lowercase().contains(queryText)) }
+        }
         labelCache.clear()
         onDataChanged()
         invalidate()
@@ -109,7 +119,7 @@ abstract class AppsView(ctx: Context) : View(ctx) {
         }
         var s = labelCache[e.key]
         if (s == null) {
-            s = TextUtils.ellipsize(e.label, textPaint, maxW, TextUtils.TruncateAt.END).toString()
+            s = TextUtils.ellipsize(Tx.str(S.TX_LABEL_DRAWER, e.label), textPaint, maxW, TextUtils.TruncateAt.END).toString()
             labelCache[e.key] = s
         }
         return s
@@ -120,18 +130,15 @@ abstract class AppsView(ctx: Context) : View(ctx) {
         val al = (255f * a).toInt().coerceIn(0, 255)
         if (al == 0) return
         if (pressKey != null && !pressSp.active && pressSp.target >= 1f) pressKey = null
-        val sz = if (e.key == pressKey) size * pressSp.value else size
-        IconShadow.draw(c, cx, cy, sz, a * 0.9f)
-        bmpPaint.alpha = al
-        dst.set(cx - sz / 2f, cy - sz / 2f, cx + sz / 2f, cy + sz / 2f)
-        c.drawBitmap(b, null, dst, bmpPaint)
+        val sz = (if (e.key == pressKey) size * pressSp.value else size) * IconFx.scale(iconArea)
+        IconFx.draw(c, b, e.tint, cx, cy, sz, a, iconArea)
     }
 
     protected fun drawLabel(c: Canvas, e: AppEntry, cx: Float, y: Float, maxW: Float, a: Float) {
-        if (!Prefs.labels) return
-        val al = (255f * a).toInt().coerceIn(0, 255)
+        if (!Prefs.labels || !S.b(S.DR_LABELS)) return
+        val al = Tx.alpha(S.TX_LABEL_DRAWER, a)
         if (al == 0) return
         textPaint.alpha = al
-        c.drawText(labelOf(e, maxW), cx, y, textPaint)
+        c.drawText(labelOf(e, maxW), cx, y + Tx.dy(S.TX_LABEL_DRAWER), textPaint)
     }
 }

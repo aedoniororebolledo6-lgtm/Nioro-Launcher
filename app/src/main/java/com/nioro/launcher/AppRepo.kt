@@ -31,6 +31,7 @@ import java.util.concurrent.Executors
 class AppEntry(val key: String, val pkg: String, val cls: String, val label: String) {
     var icon: Bitmap? = null
     var tint: Int = 0xFF3A5BA0.toInt()
+    var installed: Long = 0L
 }
 
 /** Lista de apps instaladas + iconos "horneados" con forma squircle y brillo de cristal. */
@@ -42,6 +43,7 @@ object AppRepo {
     private val main = Handler(Looper.getMainLooper())
     private val cache = HashMap<String, Bitmap>()
     private val tintCache = HashMap<String, Int>()
+    private val installCache = HashMap<String, Long>()
     var launchpadIcon: Bitmap? = null
         private set
     var recentsIcon: Bitmap? = null
@@ -63,6 +65,19 @@ object AppRepo {
         }
     }
 
+    /** aplica el orden elegido en Ajustes a una lista de apps */
+    fun sorted(list: List<AppEntry>): List<AppEntry> {
+        return when (S.i(S.DR_SORT)) {
+            1 -> list.sortedByDescending { it.label.lowercase() }
+            2 -> {
+                val order = Recents.order()
+                list.sortedWith(compareBy({ val i = order.indexOf(it.key); if (i < 0) Int.MAX_VALUE else i }, { it.label.lowercase() }))
+            }
+            3 -> list.sortedByDescending { it.installed }
+            else -> list
+        }
+    }
+
     fun visible(): List<AppEntry> {
         val h = Prefs.hidden()
         return apps.filter { it.key !in h }
@@ -81,7 +96,7 @@ object AppRepo {
         return i
     }
 
-    private fun px(): Int = dp(72f).toInt()
+    private fun px(): Int = dp(when (S.i(S.P_ICON_RES)) { 0 -> 56f; 2 -> 96f; else -> 72f }).toInt()
 
     fun load(ctx: Context, done: () -> Unit) {
         val app = ctx.applicationContext
@@ -89,11 +104,12 @@ object AppRepo {
             try {
                 // si cambió la forma de los iconos, se vuelven a hornear todos
                 val shape = Prefs.iconShape
-                val shapeChanged = shape != workerShape
+                val key = shape * 10 + S.i(S.P_ICON_RES)
+                val shapeChanged = key != workerShape
                 if (shapeChanged) {
                     cache.clear()
                     tintCache.clear()
-                    workerShape = shape
+                    workerShape = key
                 }
                 val pm = app.packageManager
                 val q = Intent(Intent.ACTION_MAIN)
@@ -102,11 +118,14 @@ object AppRepo {
                 val out = ArrayList<AppEntry>()
                 for (ri in list) {
                     // si se eligió otra forma mientras horneaba, se abandona: la carga siguiente la hará
-                    if (Prefs.iconShape != shape) throw InterruptedException("forma cambiada")
+                    if (Prefs.iconShape != shape || S.i(S.P_ICON_RES) != key % 10) throw InterruptedException("forma cambiada")
                     val ai = ri.activityInfo ?: continue
                     val key = ai.packageName + "/" + ai.name
                     val label = try { ri.loadLabel(pm).toString() } catch (t: Throwable) { ai.packageName }
                     val e = AppEntry(key, ai.packageName, ai.name, label)
+                    e.installed = installCache.getOrPut(ai.packageName) {
+                        try { pm.getPackageInfo(ai.packageName, 0).firstInstallTime } catch (t: Throwable) { 0L }
+                    }
                     val cached = cache[key]
                     if (cached != null) {
                         e.icon = cached
@@ -462,6 +481,9 @@ object Recents {
         return lastUse <= d
     }
 
+    /** claves de las apps en orden de uso (para ordenar la vista de apps) */
+    fun order(): List<String> = snapshot()
+
     fun hasUsageAccess(ctx: Context): Boolean {
         return try {
             val ops = ctx.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
@@ -479,7 +501,7 @@ object Recents {
         try {
             val usm = ctx.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
             val now = System.currentTimeMillis()
-            val ev = usm.queryEvents(now - 12L * 3600_000L, now)
+            val ev = usm.queryEvents(now - S.f(S.RC_HOURS).toLong() * 3600_000L, now)
             val e = UsageEvents.Event()
             val last = HashMap<String, Long>()
             while (ev.hasNextEvent()) {
@@ -509,7 +531,8 @@ object Recents {
             val e = AppRepo.get(k) ?: continue
             if (seen.add(e.pkg)) out.add(e)
         }
-        return if (out.size > 20) ArrayList(out.subList(0, 20)) else out
+        val max = S.i(S.RC_MAX)
+        return if (out.size > max) ArrayList(out.subList(0, max)) else out
     }
 
     /** Apps usadas en los últimos 30 min: se marcan con un puntito bajo el icono del dock. */
@@ -517,7 +540,8 @@ object Recents {
         val sess = snapshot()
         val out = HashSet<String>()
         val now = System.currentTimeMillis()
-        for ((pkg, t) in usagePackages(ctx)) if (now - t < 30L * 60_000L && !isDismissed(pkg, t)) out.add(pkg)
+        val win = S.f(S.K_RECENT_MIN).toLong() * 60_000L
+        for ((pkg, t) in usagePackages(ctx)) if (now - t < win && !isDismissed(pkg, t)) out.add(pkg)
         if (out.isEmpty()) {
             for (i in 0 until minOf(4, sess.size)) {
                 val e = AppRepo.get(sess[i]) ?: continue

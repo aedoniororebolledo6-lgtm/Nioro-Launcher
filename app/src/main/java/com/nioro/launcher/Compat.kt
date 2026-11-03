@@ -27,7 +27,10 @@ object Compat {
             val wantId = when {
                 same.size < 2 -> 0
                 Prefs.saver -> (same.minByOrNull { abs(it.refreshRate - 60f) } ?: cur).modeId
-                animating -> (same.maxByOrNull { it.refreshRate } ?: cur).modeId
+                animating -> {
+                    val cap = when (S.i(S.P_FPS_CAP)) { 1 -> 91f; 2 -> 61f; else -> 1000f }
+                    (same.filter { it.refreshRate <= cap }.maxByOrNull { it.refreshRate } ?: same.minByOrNull { it.refreshRate } ?: cur).modeId
+                }
                 else -> 0
             }
             val lp = act.window.attributes

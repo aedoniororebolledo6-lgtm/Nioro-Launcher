@@ -18,6 +18,8 @@ import kotlin.math.roundToInt
 
 /** Vista 1 - Launchpad: rejilla paginada a pantalla completa, como el Launchpad de macOS. */
 class LaunchpadView(ctx: Context) : AppsView(ctx) {
+    override val iconArea = S.IA_LAUNCHPAD
+
 
     private val pageSp = ticker.add(SpringValue(0f, 240f, 27f))
     private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -60,7 +62,7 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
         dotsY = h - insetBottom - dp(40f)
         val avail = dotsY - dp(20f) - top
         val minCell = iconSize + dp(36f) + dp(10f)
-        rows = (avail / minCell).toInt().coerceIn(3, 8)
+        rows = if (S.i(S.LP_ROWS) > 0) S.i(S.LP_ROWS) + 2 else (avail / minCell).toInt().coerceIn(3, 8)
         cap = cols * rows
         cellW = w / cols
         cellH = avail / rows
@@ -118,19 +120,20 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
                 val cy = top + row * cellH + cellH * 0.42f
                 // entrada tipo Launchpad: los iconos del centro llegan primero
                 val d = hypot(cx - w / 2f, cy - height / 2f) / w
-                val q = (p - d * 0.3f) / (1f - d * 0.3f)
-                val sc = lerp(1.38f, 1f, q)
+                val dc = (d * 0.3f * S.p(S.LP_CENTER)).coerceIn(0f, 0.9f)
+                val q = (p - dc) / (1f - dc)
+                val sc = lerp(1f + 0.38f * S.p(S.LP_ZOOM), 1f, q)
                 val al = clamp01(q * 1.7f)
                 val e = shown[idx]
                 drawIcon(c, e, cx, cy, iconSize * sc, al)
                 drawLabel(c, e, cx, cy + iconSize / 2f + dp(17f) * sc, cellW - dp(8f), al)
             }
         }
-        if (n > 1) {
+        if (n > 1 && S.b(S.LP_DOTS)) {
             val gap = dp(15f)
             val x0 = w / 2f - (n - 1) * gap / 2f
             dotsRect.set(x0 - dp(14f), dotsY - dp(11f), x0 + (n - 1) * gap + dp(14f), dotsY + dp(11f))
-            glass.draw(c, dotsRect, dp(11f), 0.7f * clamp01(p), false)
+            glass.draw(c, dotsRect, dp(11f), 0.7f * clamp01(p), false, S.SF_LP_DOTS)
             for (i in 0 until n) {
                 val near = 1f - min(1f, abs(i - pv))
                 dotPaint.color = Color.argb(((90 + 165 * near) * clamp01(p)).toInt(), 255, 255, 255)
@@ -167,7 +170,7 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
                 downIdx = idxAt(x, y)
                 uiHandler.removeCallbacks(longRun)
                 unpress()
-                if (downIdx >= 0) uiHandler.postDelayed(longRun, 380L)
+                if (downIdx >= 0) uiHandler.postDelayed(longRun, longMs)
                 if (downIdx >= 0) press(shown[downIdx])
                 return true
             }
@@ -188,8 +191,9 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
                     if (t < 0f) t = rubber(t, 1f)
                     if (t > n) t = n + rubber(t - n, 1f)
                     pageSp.snap(t)
+                    Mo.tune(pageSp, S.MO_LP_PAGE, 240f, 0.87f)
                     invalidate()
-                } else if (mode == 2 && dy > dp(110f)) {
+                } else if (mode == 2 && dy > dp(110f) && S.b(S.DR_SWIPE_CLOSE)) {
                     mode = 3
                     listener?.onClose()
                 }

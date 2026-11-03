@@ -45,6 +45,16 @@ object Motion {
     // ---------------- Transición entre páginas ----------------
     // 0 Plana, 1 Cubo, 2 Cascada, 3 Zoom, 4 Carrusel
     fun pageT(mode: Int, o: Float, w: Float, colFrac: Float, out: PT) {
+        pageRaw(mode, o, w, colFrac, out)
+        val k = S.p(S.PAGE_BASE + mode * 2)
+        val fade = S.p(S.PAGE_BASE + mode * 2 + 1)
+        out.rotY *= k
+        out.sc = 1f - (1f - out.sc) * k
+        if (mode == 2) out.tx = o * w + (out.tx - o * w) * k
+        out.alpha = clamp01(1f - (1f - out.alpha) * fade)
+    }
+
+    private fun pageRaw(mode: Int, o: Float, w: Float, colFrac: Float, out: PT) {
         val a = abs(o)
         out.tx = 0f
         out.sc = 1f
@@ -81,22 +91,29 @@ object Motion {
     // ---------------- Volver al inicio ----------------
     // 0 Zoom, 1 Rebote, 2 Cascada, 3 Cristal, 4 Deslizar
     fun enterTune(style: Int, sp: SpringValue) {
+        val m = S.MO_RET0 + style.coerceIn(0, 4)
         when (style) {
-            1 -> sp.tune(190f, 0.5f)
-            2 -> sp.tune(140f, 0.9f)
-            4 -> sp.tune(170f, 0.85f)
-            else -> sp.tune(190f, 0.95f)
+            1 -> Mo.tune(sp, m, 190f, 0.5f)
+            2 -> Mo.tune(sp, m, 140f, 0.9f)
+            4 -> Mo.tune(sp, m, 170f, 0.85f)
+            else -> Mo.tune(sp, m, 190f, 0.95f)
         }
     }
 
     fun enterItem(style: Int, p: Float, idx: Int, n: Int, out: IT) {
+        val st = style.coerceIn(0, 4)
+        val b = S.RET_BASE + st * 4
+        val dist = S.p(b)
+        val stagger = S.p(b + 1)
+        val scl = S.p(b + 2)
+        val fade = S.p(b + 3)
         val frac = if (n <= 1) 0f else idx.toFloat() / (n - 1)
-        val delay = when (style) {
+        val delay = (when (style) {
             2 -> frac * 0.5f
             4 -> frac * 0.3f
             1 -> frac * 0.25f
             else -> frac * 0.15f
-        }
+        } * stagger).coerceIn(0f, 0.85f)
         var l = (p - delay) / (1f - delay)
         if (l < 0f) l = 0f
         val inv = 1f - l
@@ -105,27 +122,45 @@ object Motion {
         out.sc = 1f
         out.alpha = 1f
         when (style) {
-            0 -> { out.sc = 1f + 0.2f * inv; out.alpha = clamp01(l * 1.6f) }
-            1 -> { out.sc = 1f - 0.45f * inv; out.alpha = clamp01(l * 3f) }
-            2 -> { out.dy = inv * dp(140f); out.sc = 1f - 0.15f * inv; out.alpha = clamp01(l * 2f) }
-            3 -> { out.sc = 1f + 0.08f * inv; out.alpha = clamp01(l * 1.4f) }
-            else -> { out.dx = -inv * dp(180f); out.alpha = clamp01(l * 2f) }
+            0 -> { out.sc = 1f + 0.2f * inv * scl; out.alpha = clamp01(l * 1.6f * fade) }
+            1 -> { out.sc = 1f - 0.45f * inv * scl; out.alpha = clamp01(l * 3f * fade) }
+            2 -> { out.dy = inv * dp(140f) * dist; out.sc = 1f - 0.15f * inv * scl; out.alpha = clamp01(l * 2f * fade) }
+            3 -> { out.sc = 1f + 0.08f * inv * scl; out.alpha = clamp01(l * 1.4f * fade) }
+            else -> { out.dx = -inv * dp(180f) * dist; out.alpha = clamp01(l * 2f * fade) }
         }
     }
 
     // ---------------- Abrir app ----------------
     // 0 Zoom, 1 Resorte, 2 Cristal, 3 Giro 3D, 4 Deslizar
     fun openTune(style: Int, sp: SpringValue) {
+        val m = S.MO_OPEN0 + style.coerceIn(0, 4)
         when (style) {
-            1 -> sp.tune(190f, 0.55f)
-            2 -> sp.tune(150f, 0.85f)
-            3 -> sp.tune(210f, 0.9f)
-            4 -> sp.tune(230f, 1.0f)
-            else -> sp.tune(300f, 1.0f)
+            1 -> Mo.tune(sp, m, 190f, 0.55f)
+            2 -> Mo.tune(sp, m, 150f, 0.85f)
+            3 -> Mo.tune(sp, m, 210f, 0.9f)
+            4 -> Mo.tune(sp, m, 230f, 1.0f)
+            else -> Mo.tune(sp, m, 300f, 1.0f)
         }
     }
 
+    /** momento (0..1) en que se abre la app de verdad durante la animación */
+    fun openFireAt(style: Int): Float = S.p(S.OPEN_BASE + style.coerceIn(0, 4) * 5 + 2)
+
     fun openFrame(style: Int, p: Float, from: RectF, to: RectF, out: OF) {
+        openRaw(style, p, from, to, out)
+        val b = S.OPEN_BASE + style.coerceIn(0, 4) * 5
+        val zoom = S.p(b)
+        val corner = S.p(b + 1)
+        val fade = S.p(b + 3)
+        val extra = S.p(b + 4)
+        out.iconS = 1f + (out.iconS - 1f) * zoom * (if (style == 0 || style == 1) extra else 1f)
+        out.corner *= corner
+        out.iconA = clamp01(1f - (1f - out.iconA) * fade)
+        if (style == 3) out.rotY *= extra
+        if (style == 2) out.glow *= extra
+    }
+
+    private fun openRaw(style: Int, p: Float, from: RectF, to: RectF, out: OF) {
         val cFrom = from.width() * 0.225f
         val cTo = dp(38f)
         out.rotY = 0f

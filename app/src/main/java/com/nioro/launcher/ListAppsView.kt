@@ -15,6 +15,8 @@ import kotlin.math.min
 
 /** Vista 4 - Lista: filas de cristal con letras de sección e índice A-Z con burbuja. */
 class ListAppsView(ctx: Context) : AppsView(ctx) {
+    override val iconArea = S.IA_LIST
+
 
     private class Row(val header: Char, val entry: AppEntry?, val y: Float)
 
@@ -79,9 +81,12 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
         val w = width.toFloat()
         val h = height.toFloat()
         if (w <= 0f) return
-        rowH = dp(62f)
+        rowH = dp(S.f(S.LIST_ROW))
+        Tx.apply(namePaint, S.TX_LIST, dp(17f), 400, 0f, 0)
+        Tx.apply(letterPaint, S.TX_LIST_LETTER, dp(14f), 700, 0f, 0)
+        Tx.apply(bubblePaint, S.TX_BUBBLE, dp(34f), 500, 0f, 0)
         headH = dp(30f)
-        iconSize = dp(44f)
+        iconSize = dp(S.f(S.LIST_ICON))
         panel.set(dp(14f), insetTop + dp(76f), w - dp(14f), h - insetBottom - dp(14f))
         rows.clear()
         letters.clear()
@@ -130,7 +135,7 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
         val a = clamp01(p * 1.5f)
         c.save()
         c.translate(0f, (1f - min(p, 1f)) * dp(70f))
-        glass.draw(c, panel, dp(30f), a)
+        glass.draw(c, panel, dp(30f), a, true, S.SF_LISTPANEL)
         c.save()
         c.clipRect(panel.left, panel.top + dp(6f), panel.right, panel.bottom - dp(6f))
         val baseY = panel.top + dp(8f) - scroll.value
@@ -146,7 +151,8 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
             val ox = (1f - q) * dp(60f)
             val al = clamp01(q * 1.4f)
             if (r.entry == null) {
-                letterPaint.alpha = (200 * al).toInt()
+                letterPaint.alpha = Tx.alpha(S.TX_LIST_LETTER, al * 0.8f)
+                if (!S.b(S.LIST_LETTERS)) letterPaint.alpha = 0
                 c.drawText(r.header.toString(), panel.left + dp(22f) + ox, y + headH - dp(8f), letterPaint)
             } else {
                 if (downRow == i && !moved && !onIndex) {
@@ -155,16 +161,16 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
                 }
                 val cx = panel.left + dp(22f) + iconSize / 2f + ox
                 drawIcon(c, r.entry, cx, y + rowH / 2f, iconSize, al)
-                namePaint.alpha = (255 * al).toInt()
+                namePaint.alpha = Tx.alpha(S.TX_LIST, al)
                 c.drawText(r.entry.label, cx + iconSize / 2f + dp(16f), y + rowH / 2f + dp(6f), namePaint)
-                linePaint.alpha = (34 * al).toInt()
+                linePaint.alpha = if (S.b(S.LIST_LINES)) (34 * al).toInt() else 0
                 val lx = cx + iconSize / 2f + dp(16f)
                 c.drawLine(lx, y + rowH - dp(0.5f), panel.right - dp(40f), y + rowH - dp(0.5f), linePaint)
             }
         }
         c.restore()
         // índice A-Z
-        if (letters.size > 1) {
+        if (letters.size > 1 && S.b(S.LIST_INDEX)) {
             val top = panel.top + dp(18f)
             val ih = (panel.height() - dp(36f)) / letters.size
             for (i in 0 until letters.size) {
@@ -174,7 +180,7 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
         }
         if (onIndex && bubbleChar != ' ') {
             rect.set(width / 2f - dp(42f), height / 2f - dp(42f), width / 2f + dp(42f), height / 2f + dp(42f))
-            glass.draw(c, rect, dp(26f))
+            glass.draw(c, rect, dp(26f), 1f, true, S.SF_BUBBLE)
             c.drawText(bubbleChar.toString(), rect.centerX(), rect.centerY() + dp(12f), bubblePaint)
         }
         c.restore()
@@ -230,7 +236,7 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
                 downRow = rowAt(x, y)
                 uiHandler.removeCallbacks(longRun)
                 unpress()
-                if (downRow >= 0) uiHandler.postDelayed(longRun, 380L)
+                if (downRow >= 0) uiHandler.postDelayed(longRun, longMs)
                 if (downRow >= 0) press(rows[downRow].entry)
                 invalidate()
                 return true

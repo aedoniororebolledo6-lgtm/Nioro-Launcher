@@ -17,6 +17,8 @@ import kotlin.math.min
  * Los iconos salen del botón Launchpad del dock y suben en curva; arrastrar los desliza por el arco.
  */
 class FanView(ctx: Context) : AppsView(ctx) {
+    override val iconArea = S.IA_FAN
+
 
     private val scroll = Scroll1D(ticker)
     private val pill = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -51,6 +53,7 @@ class FanView(ctx: Context) : AppsView(ctx) {
     init {
         labelPaint.color = Color.WHITE
         labelPaint.textSize = dp(15f)
+        labelPaint.isAntiAlias = true
         labelPaint.textAlign = Paint.Align.LEFT
     }
 
@@ -59,13 +62,14 @@ class FanView(ctx: Context) : AppsView(ctx) {
         val h = height.toFloat()
         if (w <= 0f) return
         iconSize = dp(Prefs.iconDp.toFloat() - 4f)
-        step = iconSize * 1.2f
+        step = iconSize * 1.2f * S.p(S.FAN_GAP)
+        Tx.apply(labelPaint, S.TX_FAN, dp(15f), 400, 0f, 0)
         ax = if (anchorX > 0f) anchorX else w / 2f
         ay = h - insetBottom - dp(104f) - iconSize / 2f
         val usable = ay - (insetTop + dp(90f))
         visibleCount = max(3, (usable / step).toInt())
         val reach = h * 0.72f
-        k = (w * 0.26f) / (reach * reach)
+        k = (w * 0.26f * S.p(S.FAN_CURVE)) / (reach * reach)
         scroll.min = 0f
         scroll.max = max(0, shown.size - visibleCount).toFloat() * step
         scroll.dim = h * 0.5f
@@ -125,10 +129,10 @@ class FanView(ctx: Context) : AppsView(ctx) {
             val e = shown[i]
             val size = iconSize * sc
             drawIcon(c, e, cx, cy, size, al)
-            if (Prefs.labels && q > 0.6f) {
-                val text = e.label
+            if (Prefs.labels && S.b(S.FAN_LABELS) && S.b(S.DR_LABELS) && q > 0.6f) {
+                val text = Tx.str(S.TX_FAN, e.label)
                 val tw = min(labelPaint.measureText(text) + dp(26f), width * 0.55f)
-                val onRight = cx < width / 2f
+                val onRight = when (S.i(S.FAN_SIDE)) { 1 -> false; 2 -> true; else -> cx < width / 2f }
                 if (onRight) {
                     val left = cx + size / 2f + dp(8f)
                     rectTmp.set(left, cy - dp(15f), left + tw, cy + dp(15f))
@@ -136,8 +140,8 @@ class FanView(ctx: Context) : AppsView(ctx) {
                     val right = cx - size / 2f - dp(8f)
                     rectTmp.set(right - tw, cy - dp(15f), right, cy + dp(15f))
                 }
-                glass.draw(c, rectTmp, dp(15f), al * 0.9f, false)
-                labelPaint.alpha = (255 * al).toInt().coerceIn(0, 255)
+                glass.draw(c, rectTmp, dp(15f), al * 0.9f, false, S.SF_FAN_LABEL)
+                labelPaint.alpha = Tx.alpha(S.TX_FAN, al)
                 c.save()
                 c.clipRect(rectTmp)
                 c.drawText(text, rectTmp.left + dp(13f), cy + dp(5.5f), labelPaint)
@@ -176,7 +180,7 @@ class FanView(ctx: Context) : AppsView(ctx) {
                 downIdx = idxAt(x, y)
                 uiHandler.removeCallbacks(longRun)
                 unpress()
-                if (downIdx >= 0) uiHandler.postDelayed(longRun, 380L)
+                if (downIdx >= 0) uiHandler.postDelayed(longRun, longMs)
                 if (downIdx >= 0) press(shown[downIdx])
                 return true
             }

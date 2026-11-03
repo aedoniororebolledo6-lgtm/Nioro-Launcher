@@ -73,7 +73,7 @@ class MainActivity : Activity() {
             } else {
                 // se espera un poco: así gestos seguidos no cambian de frecuencia una y otra vez
                 root.removeCallbacks(calmDown)
-                root.postDelayed(calmDown, 1200)
+                root.postDelayed(calmDown, S.f(S.P_IDLE).toLong())
             }
         }
 
@@ -106,11 +106,6 @@ class MainActivity : Activity() {
         reloadApps()
     }
 
-    override fun onDestroy() {
-        try { unregisterReceiver(pkgReceiver) } catch (t: Throwable) {}
-        super.onDestroy()
-    }
-
     private fun reloadApps() {
         AppRepo.load(this) {
             if (isDestroyed) return@load
@@ -119,6 +114,24 @@ class MainActivity : Activity() {
                 Prefs.setDockKeys(dock)
                 Prefs.setHomeKeys(AppRepo.seedHome(this).filter { it !in dock })
                 Prefs.seeded = true
+            }
+            // apps recién instaladas: se añaden al final del inicio (como One UI)
+            if (AppRepo.apps.isNotEmpty()) {
+                val known = Prefs.knownKeys()
+                if (known.isEmpty()) {
+                    Prefs.setKnownKeys(AppRepo.apps.map { it.key })
+                } else {
+                    val fresh = AppRepo.apps.filter { it.key !in known }
+                    if (fresh.isNotEmpty()) {
+                        if (S.b(S.H_AUTO_ADD)) {
+                            val h = Prefs.homeKeys()
+                            val d = Prefs.dockKeys()
+                            for (e in fresh) if (e.key !in h && e.key !in d) h.add(e.key)
+                            Prefs.setHomeKeys(h)
+                        }
+                        Prefs.setKnownKeys(AppRepo.apps.map { it.key })
+                    }
+                }
             }
             // limpiar apps desinstaladas (solo si la lista cargó bien, para no borrar el inicio por error)
             if (AppRepo.apps.isNotEmpty()) {
@@ -163,6 +176,15 @@ class MainActivity : Activity() {
             if (recents.isOpen) recents.closeNow()
         }
         if (launchedApp || wasStopped) home.playEnter()
+        if (S.b(S.DT_BATTERY)) {
+            try {
+                val bi = registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                val lv = bi?.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1) ?: -1
+                val sc = bi?.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100) ?: 100
+                if (lv >= 0 && sc > 0) home.setBattery(lv * 100 / sc)
+            } catch (t: Throwable) {
+            }
+        }
         launchedApp = false
         wasStopped = false
         refreshRunning()
@@ -194,7 +216,7 @@ class MainActivity : Activity() {
                 home.isEditing -> home.exitEdit()
                 recents.isOpen -> recents.close()
                 drawer.isOpen -> drawer.close()
-                else -> home.goToFirstPage()
+                else -> runGesture(S.G_HOME)
             }
         }
     }
@@ -244,6 +266,7 @@ class MainActivity : Activity() {
     // ---------------------------------------------------------------- Abrir apps
     private fun launch(e: AppEntry, from: RectF) {
         menu.dismiss()
+        Hx.fire(root, S.HE_OPEN)
         val style = Prefs.openAnim
         val src = RectF(from)
         if (src.width() < 2f) src.set(root.width / 2f - 40f, root.height / 2f - 40f, root.width / 2f + 40f, root.height / 2f + 40f)
@@ -289,7 +312,7 @@ class MainActivity : Activity() {
                 Prefs.setDockKeys(Prefs.dockKeys().filter { it != e.key })
                 home.reload()
             })
-        } else if (dockKeys.size < 5) {
+        } else if (dockKeys.size < S.i(S.K_MAX)) {
             items.add(MenuView.Item("Añadir al dock") {
                 val l = Prefs.dockKeys()
                 l.add(e.key)
@@ -298,13 +321,13 @@ class MainActivity : Activity() {
                 home.reload()
             })
         }
-        items.add(MenuView.Item("Información de la app") {
+        if (S.b(S.M_INFO)) items.add(MenuView.Item("Información de la app") {
             try {
                 startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + e.pkg)))
             } catch (t: Throwable) {
             }
         })
-        items.add(MenuView.Item("Ocultar") {
+        if (S.b(S.M_HIDE)) items.add(MenuView.Item("Ocultar") {
             val h = Prefs.hidden()
             if (e.key !in h) h.add(e.key)
             Prefs.setHidden(h)
@@ -314,7 +337,7 @@ class MainActivity : Activity() {
             drawer.refreshData()
             Toast.makeText(this, "Oculta. Recupérala en Ajustes del launcher.", Toast.LENGTH_SHORT).show()
         })
-        items.add(MenuView.Item("Desinstalar") {
+        if (S.b(S.M_UNINSTALL)) items.add(MenuView.Item("Desinstalar") {
             try {
                 @Suppress("DEPRECATION")
                 startActivity(Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:" + e.pkg)))
@@ -322,6 +345,91 @@ class MainActivity : Activity() {
             }
         })
         menu.show(e.label, anchor, items)
+    }
+
+    // ---------------------------------------------------------------- Gestos
+    private var torchOn = false
+    private val torchCb = object : android.hardware.camera2.CameraManager.TorchCallback() {
+        override fun onTorchModeChanged(cameraId: String, enabled: Boolean) {
+            torchOn = enabled
+        }
+    }
+    private var torchReg = false
+
+    /** ejecuta la acción configurada para el gesto [g] */
+    private fun runGesture(g: Int) {
+        val a = S.gestAction(g)
+        if (a == S.A_NONE) return
+        Hx.gesture(root, g)
+        when (a) {
+            S.A_DRAWER -> { menu.dismiss(); drawer.open(home.launchpadX()) }
+            S.A_NOTIF -> homeHost.expandShade()
+            S.A_QS -> try {
+                @SuppressLint("WrongConstant")
+                val sbm = getSystemService("statusbar")
+                Class.forName("android.app.StatusBarManager").getMethod("expandSettingsPanel").invoke(sbm)
+            } catch (t: Throwable) {
+                homeHost.expandShade()
+            }
+            S.A_RECENTS -> homeHost.openRecents()
+            S.A_EDIT -> home.enterEdit()
+            S.A_SEARCH -> {
+                drawer.open(home.launchpadX())
+                drawer.showKeyboard()
+            }
+            S.A_SETTINGS -> drawerCb.openSettings()
+            S.A_WALLPAPER -> try {
+                startActivity(Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Fondo de pantalla"))
+            } catch (t: Throwable) {
+            }
+            S.A_FIRST -> home.goToFirstPage()
+            S.A_TORCH -> try {
+                val cm = getSystemService(Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager
+                if (!torchReg) {
+                    cm.registerTorchCallback(torchCb, null)
+                    torchReg = true
+                }
+                val id = cm.cameraIdList.firstOrNull {
+                    cm.getCameraCharacteristics(it).get(android.hardware.camera2.CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+                }
+                if (id != null) cm.setTorchMode(id, !torchOn)
+            } catch (t: Throwable) {
+                Toast.makeText(this, "No se pudo usar la linterna", Toast.LENGTH_SHORT).show()
+            }
+            S.A_CAMERA -> try {
+                startActivity(Intent(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } catch (t: Throwable) {
+            }
+            S.A_SYS -> try {
+                startActivity(Intent(Settings.ACTION_SETTINGS))
+            } catch (t: Throwable) {
+            }
+            S.A_SAVER -> {
+                Prefs.saver = !Prefs.saver
+                Compat.applyRefreshRate(this)
+                home.invalidate()
+                Toast.makeText(this, if (Prefs.saver) "Modo ahorro activado" else "Modo ahorro desactivado", Toast.LENGTH_SHORT).show()
+            }
+            S.A_NEXT_VIEW -> {
+                Prefs.drawerStyle = (Prefs.drawerStyle + 1) % 5
+                drawer.styleChanged()
+                Toast.makeText(this, "Vista: " + SettingsActivity.DRAWER[Prefs.drawerStyle], Toast.LENGTH_SHORT).show()
+            }
+            S.A_NEXT_SHAPE -> {
+                Prefs.iconShape = (Prefs.iconShape + 1) % 5
+                Toast.makeText(this, "Iconos: " + SettingsActivity.SHAPES[Prefs.iconShape], Toast.LENGTH_SHORT).show()
+                reloadApps()
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        if (torchReg) try {
+            (getSystemService(Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager).unregisterTorchCallback(torchCb)
+        } catch (t: Throwable) {
+        }
+        try { unregisterReceiver(pkgReceiver) } catch (t: Throwable) {}
+        super.onDestroy()
     }
 
     private fun homeMenu(x: Float, y: Float) {
@@ -379,6 +487,19 @@ class MainActivity : Activity() {
             }
         }
         override fun showHomeMenu(x: Float, y: Float) = homeMenu(x, y)
+        override fun gesture(g: Int) = runGesture(g)
+        override fun special(i: Int) {
+            try {
+                if (i == 0) {
+                    startActivity(Intent(android.provider.AlarmClock.ACTION_SHOW_ALARMS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                } else {
+                    val u = Uri.parse("content://com.android.calendar/time/" + System.currentTimeMillis())
+                    startActivity(Intent(Intent.ACTION_VIEW, u).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }
+            } catch (t: Throwable) {
+                Toast.makeText(this@MainActivity, "No hay una app para eso", Toast.LENGTH_SHORT).show()
+            }
+        }
         override fun editAction(i: Int) {
             when (i) {
                 0 -> try {

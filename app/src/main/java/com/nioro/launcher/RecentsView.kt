@@ -79,6 +79,10 @@ class RecentsView(ctx: Context) : View0(ctx) {
     fun setItems(list: List<AppEntry>) {
         items = ArrayList(list)
         style = Prefs.recentsAnim
+        Tx.apply(title, S.TX_RECENT, dp(14f), 500, 0f, 0)
+        Tx.apply(hint, S.TX_CLOSEALL, dp(14f), 500, 0f, 0)
+        Mo.tune(pos, S.MO_RECENTS_CAROUSEL, 200f, 0.92f)
+        Mo.tune(dismissY, S.MO_DISMISS, 260f, 0.93f)
         closingAll = false
         closeAllSp.snap(0f)
         pos.snap(0f)
@@ -89,19 +93,21 @@ class RecentsView(ctx: Context) : View0(ctx) {
     }
 
     // ---------------- Geometría ----------------
-    private fun cardW(): Float = when (style) {
+    private fun cardW(): Float = S.p(S.RECS_BASE + style * 3) * when (style) {
         0 -> width * 0.66f
         1 -> width * 0.78f
         2 -> width * 0.56f
         else -> width * 0.42f
     }
+    private val gapK: Float get() = S.p(S.RECS_BASE + style * 3 + 1)
+    private val tiltK: Float get() = S.p(S.RECS_BASE + style * 3 + 2)
 
     private fun cardH(): Float = cardW() * (if (style == 4) 1f else 1.72f)
     private fun spacing(): Float = when (style) {
-        0 -> cardW() + dp(18f)
-        1 -> cardW() * 0.55f
-        2 -> cardW() * 0.6f
-        else -> cardW() + dp(30f)
+        0 -> (cardW() + dp(18f)) * gapK
+        1 -> cardW() * 0.55f * gapK
+        2 -> cardW() * 0.6f * gapK
+        else -> (cardW() + dp(30f)) * gapK
     }
 
     private fun gridCols(): Int = 2
@@ -141,19 +147,19 @@ class RecentsView(ctx: Context) : View0(ctx) {
         when (style) {
             0 -> {
                 cx = w / 2f + o * spacing()
-                sc = 1f - min(1f, abs(o)) * 0.08f
+                sc = 1f - min(1f, abs(o)) * 0.08f * tiltK
             }
             1 -> {
                 // pila: las tarjetas anteriores se apilan a la izquierda
                 val sp = spacing()
                 cx = if (o >= 0) w / 2f + o * w * 0.9f else w / 2f + o * sp * 0.35f
-                sc = if (o >= 0) 1f else 1f - min(4f, -o) * 0.05f
+                sc = if (o >= 0) 1f else 1f - min(4f, -o) * 0.05f * tiltK
                 outA = if (o < -4f) 0f else 1f
                 outRot = 0f
             }
             2 -> {
                 cx = w / 2f + o * spacing()
-                outRot = (-o * 55f).coerceIn(-60f, 60f)
+                outRot = (-o * 55f * tiltK).coerceIn(-80f, 80f)
                 sc = 1f - min(1f, abs(o)) * 0.18f
             }
             3 -> {
@@ -231,7 +237,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
             if (outRot != 0f) Rot3D.apply(c, outRot, r.centerX(), r.centerY())
             if (style == 4) {
                 val rad = r.width() / 2f
-                glass.draw(c, r, rad, al)
+                glass.draw(c, r, rad, al, true, S.SF_RECENT_CARD)
                 drawIcon(c, e, r.centerX(), r.centerY(), r.width() * 0.62f, al)
             } else {
                 drawCard(c, e, r, al)
@@ -239,10 +245,14 @@ class RecentsView(ctx: Context) : View0(ctx) {
             c.restore()
         }
         // botón "Ver todo" abajo
+        if (!S.b(S.RC_CLOSEALL)) {
+            btn.setEmpty()
+            return
+        }
         btn.set(width / 2f - dp(80f), height - insetBottom - dp(78f), width / 2f + dp(80f), height - insetBottom - dp(34f))
-        glass.draw(c, btn, dp(22f), a)
-        hint.alpha = (255 * a).toInt()
-        c.drawText("Cerrar todo", btn.centerX(), btn.centerY() + dp(5f), hint)
+        glass.draw(c, btn, dp(22f), a, true, S.SF_RECENT_BTN)
+        hint.alpha = Tx.alpha(S.TX_CLOSEALL, a)
+        c.drawText(Tx.str(S.TX_CLOSEALL, "Cerrar todo"), btn.centerX(), btn.centerY() + dp(5f) + Tx.dy(S.TX_CLOSEALL), hint)
     }
 
     private fun drawCard(c: Canvas, e: AppEntry, rr: RectF, al: Float) {
@@ -252,7 +262,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
         card.color = e.tint
         card.alpha = (190 * al).toInt()
         c.drawRoundRect(rr, rad, rad, card)
-        glass.draw(c, rr, rad, al)
+        glass.draw(c, rr, rad, al, true, S.SF_RECENT_CARD)
         // "contenido" sugerido: barras de cristal suaves
         hdr.set(rr.left + dp(16f) * k, rr.top + dp(18f) * k, rr.right - dp(16f) * k, rr.top + dp(30f) * k)
         card.color = 0x33FFFFFF
@@ -264,20 +274,20 @@ class RecentsView(ctx: Context) : View0(ctx) {
         IconShadow.draw(c, rr.centerX(), rr.centerY(), isz, al)
         drawIcon(c, e, rr.centerX(), rr.centerY(), isz, al)
         // cabecera estilo iOS: icono pequeño + nombre encima de la tarjeta
+        if (!S.b(S.RC_HEADER)) return
         val hs = dp(24f) * min(1f, k + 0.2f)
         val hy = rr.top - dp(10f) - hs / 2f
         drawIcon(c, e, rr.left + dp(4f) + hs / 2f, hy, hs, al)
-        title.alpha = (255 * al).toInt()
+        title.alpha = Tx.alpha(S.TX_RECENT, al)
         title.textAlign = Paint.Align.LEFT
-        c.drawText(e.label, rr.left + dp(12f) + hs, hy + dp(5f), title)
+        c.drawText(Tx.str(S.TX_RECENT, e.label), rr.left + dp(12f) + hs, hy + dp(5f) + Tx.dy(S.TX_RECENT), title)
     }
 
     private fun drawIcon(c: Canvas, e: AppEntry, cx: Float, cy: Float, size: Float, a: Float) {
         val b = e.icon ?: return
-        bmp.alpha = (255 * a).toInt().coerceIn(0, 255)
-        r2.set(cx - size / 2f, cy - size / 2f, cx + size / 2f, cy + size / 2f)
-        c.drawBitmap(b, null, r2, bmp)
+        IconFx.draw(c, b, e.tint, cx, cy, size * IconFx.scale(S.IA_RECENTS), a, S.IA_RECENTS)
     }
+
 
     private fun hit(x: Float, y: Float): Int {
         // de arriba (dibujado último) hacia abajo
@@ -325,7 +335,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
                 val dx = x - downX
                 val dy = y - downY
                 if (mode == 0 && (abs(dx) > slop || abs(dy) > slop)) {
-                    mode = if (hitIdx >= 0 && dy < 0 && abs(dy) > abs(dx) * 1.2f) 2 else 1
+                    mode = if (S.b(S.RC_SWIPE) && hitIdx >= 0 && dy < 0 && abs(dy) > abs(dx) * 1.2f) 2 else 1
                     if (mode == 2) {
                         dismissIdx = hitIdx
                         dismissY.snap(0f)
@@ -388,7 +398,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
                         if (btn.contains(x, y)) {
                             // "Cerrar todo" de One UI: las tarjetas salen volando hacia arriba
                             Recents.forgetAll(items.map { it.key })
-                            performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+                            Hx.fire(this, S.HE_CLOSEALL)
                             closingAll = true
                             closeAllSp.snap(0f)
                             closeAllSp.to(1f)
