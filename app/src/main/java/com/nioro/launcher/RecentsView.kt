@@ -427,7 +427,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
         dismissY.snap(0f)
         if (pos.value > maxPos()) pos.to(maxPos())
         layoutGrid()
-        performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+        Hx.fire(this, S.HE_CLOSEALL)
         ticker.kick()
         invalidate()
         if (items.isEmpty()) postDelayed({ listener?.onClose() }, 250)

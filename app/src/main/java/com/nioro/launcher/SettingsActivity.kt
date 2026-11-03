@@ -1080,7 +1080,7 @@ class SettingsActivity : Activity() {
             chips[i].setOnClickListener {
                 set(i)
                 paint(i)
-                it.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+                Hx.fire(it, S.HE_SETTING)
                 pv?.let { p -> p.style = i; p.play() }
             }
         }

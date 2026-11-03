@@ -11,7 +11,6 @@ import android.os.Looper
 import android.text.TextPaint
 import android.text.TextUtils
 import android.text.format.DateFormat
-import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import android.view.View
@@ -156,6 +155,9 @@ class HomeView(ctx: Context) : View(ctx) {
     private var touchMode = M_NONE
     private var downX = 0f
     private var downY = 0f
+    /** dónde empezó el último toque (para colocar el menú del inicio) */
+    val touchX: Float get() = downX
+    val touchY: Float get() = downY
     private var pageStart = 0f
     private var moved = false
     private var inDock = false
@@ -1160,7 +1162,7 @@ class HomeView(ctx: Context) : View(ctx) {
                     val b = editBtnAt(x, y)
                     exitEdit()
                     if (b >= 0) {
-                        performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                        Hx.fire(this, S.HE_PANEL)
                         host?.editAction(b)
                     }
                 }

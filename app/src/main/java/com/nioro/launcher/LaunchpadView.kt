@@ -5,7 +5,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
-import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import kotlin.math.abs
@@ -45,7 +44,7 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
         if (mode == 0 && !moved && downIdx in shown.indices) {
             longFired = true
             unpress()
-            performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            Hx.fire(this, S.HE_LONG)
             val r = RectF()
             itemRect(downIdx, r)
             listener?.onMenu(shown[downIdx], r)

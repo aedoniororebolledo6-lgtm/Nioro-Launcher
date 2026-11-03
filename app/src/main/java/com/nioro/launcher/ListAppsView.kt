@@ -6,7 +6,6 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.Typeface
-import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import kotlin.math.abs
@@ -31,6 +30,8 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
     private val bubblePaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val letters = ArrayList<Char>()
     private val rect = RectF()
+    private val names = HashMap<String, String>()
+    private var nameW = 0f
     private var rowH = 0f
     private var headH = 0f
     private var iconSize = 0f
@@ -50,7 +51,7 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
         if (!moved && downRow in rows.indices && rows[downRow].entry != null) {
             longFired = true
             unpress()
-            performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            Hx.fire(this, S.HE_LONG)
             val r = RectF()
             val ry = panel.top + dp(8f) + rows[downRow].y - scroll.value
             r.set(panel.left + dp(16f), ry, panel.left + dp(16f) + iconSize, ry + rowH)
@@ -88,6 +89,9 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
         headH = dp(30f)
         iconSize = dp(S.f(S.LIST_ICON))
         panel.set(dp(14f), insetTop + dp(76f), w - dp(14f), h - insetBottom - dp(14f))
+        // los nombres terminan antes del índice A-Z
+        nameW = max(dp(40f), panel.right - dp(40f) - (panel.left + dp(22f) + iconSize + dp(16f)))
+        names.clear()
         rows.clear()
         letters.clear()
         var y = 0f
@@ -162,7 +166,7 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
                 val cx = panel.left + dp(22f) + iconSize / 2f + ox
                 drawIcon(c, r.entry, cx, y + rowH / 2f, iconSize, al)
                 namePaint.alpha = Tx.alpha(S.TX_LIST, al)
-                c.drawText(r.entry.label, cx + iconSize / 2f + dp(16f), y + rowH / 2f + dp(6f), namePaint)
+                c.drawText(nameOf(r.entry), cx + iconSize / 2f + dp(16f), y + rowH / 2f + dp(6f) + Tx.dy(S.TX_LIST), namePaint)
                 linePaint.alpha = if (S.b(S.LIST_LINES)) (34 * al).toInt() else 0
                 val lx = cx + iconSize / 2f + dp(16f)
                 c.drawLine(lx, y + rowH - dp(0.5f), panel.right - dp(40f), y + rowH - dp(0.5f), linePaint)
@@ -184,6 +188,11 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
             c.drawText(bubbleChar.toString(), rect.centerX(), rect.centerY() + dp(12f), bubblePaint)
         }
         c.restore()
+    }
+
+    /** nombre con el estilo de texto aplicado y recortado con "…" si no cabe */
+    private fun nameOf(e: AppEntry): String = names.getOrPut(e.key) {
+        android.text.TextUtils.ellipsize(Tx.str(S.TX_LIST, e.label), android.text.TextPaint(namePaint), nameW, android.text.TextUtils.TruncateAt.END).toString()
     }
 
     private fun rowAt(x: Float, y: Float): Int {
