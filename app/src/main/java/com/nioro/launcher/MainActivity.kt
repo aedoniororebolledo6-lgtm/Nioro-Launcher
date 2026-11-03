@@ -209,6 +209,7 @@ class MainActivity : Activity() {
         menu.dismiss()
         overlay.hide()
         home.exitEdit(true)
+        home.exitClockEdit(true)
         // nada de animaciones ni sensores mientras el launcher no se ve
         if (drawer.isOpen) drawer.closeNow()
         if (recents.isOpen) recents.closeNow()
@@ -221,6 +222,7 @@ class MainActivity : Activity() {
         if (intent?.action == Intent.ACTION_MAIN && resumed) {
             when {
                 menu.showing -> menu.dismiss()
+                home.isClockEditing -> home.exitClockEdit()
                 home.isEditing -> home.exitEdit()
                 recents.isOpen -> recents.close()
                 drawer.isOpen -> drawer.close()
@@ -234,6 +236,7 @@ class MainActivity : Activity() {
     override fun onBackPressed() {
         when {
             menu.showing -> menu.dismiss()
+            home.isClockEditing -> home.exitClockEdit()
             home.isEditing -> home.exitEdit()
             recents.isOpen -> recents.close()
             drawer.isOpen -> drawer.close()

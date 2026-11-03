@@ -617,7 +617,7 @@ object S {
     private const val CG = "Reloj"
     val CK_FORMAT = choice("clock.fmt", "Formato de hora", C_CLOCK, CG, arrayOf("Del sistema", "12 horas", "24 horas"), 0)
     val CK_ALIGN = choice("clock.align", "Alineación", C_CLOCK, CG, arrayOf("Centro", "Izquierda", "Derecha"), 0)
-    val CK_DY = num("clock.dy", "Posición vertical", C_CLOCK, CG, -40f, 100f, 0f, " dp")
+    val CK_DY = num("clock.dy", "Posición vertical", C_CLOCK, CG, -60f, 420f, 0f, " dp")
     val CK_TAP = bool("clock.tap", "Tocar el reloj abre las alarmas", C_CLOCK, CG, true)
     val CK_AMPM = bool("clock.ampm", "Mostrar a. m./p. m.", C_CLOCK, CG, true)
     val CK_BLINK = bool("clock.sep", "Separador entre horas y minutos", C_CLOCK, CG, true)
@@ -628,6 +628,9 @@ object S {
     val DT_TAP = bool("date.tap", "Tocar la fecha abre el calendario", C_CLOCK, FG, true)
     val DT_BATTERY = bool("date.battery", "Mostrar batería junto a la fecha", C_CLOCK, FG, false)
     val DT_GREETING = bool("date.greet", "Saludo según la hora", C_CLOCK, FG, false, "Buenos días / Buenas tardes / Buenas noches")
+    // se cambian también manteniendo pulsado el reloj (arrastrar y tirador de tamaño)
+    val CK_DX = num("clock.dx", "Posición horizontal", C_CLOCK, CG, -180f, 180f, 0f, " dp")
+    val CK_SCALE = num("clock.scale", "Tamaño del reloj", C_CLOCK, CG, 50f, 200f, 100f)
 
     // ==================================================================
     // 9) DOCK
