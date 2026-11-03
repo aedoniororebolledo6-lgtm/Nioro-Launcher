@@ -467,7 +467,18 @@ object Recents {
         if (!loaded) {
             loaded = true
             session.addAll(Prefs.recentKeys())
+            // también se recuerdan las apps quitadas (si no, reaparecían al reiniciarse el launcher)
+            val old = System.currentTimeMillis() - 48 * 3600_000L
+            for (line in Prefs.dismissedKeys()) {
+                val pkg = line.substringBefore('|')
+                val t = line.substringAfter('|').toLongOrNull() ?: continue
+                if (t > old) dismissed[pkg] = t
+            }
         }
+    }
+
+    private fun saveDismissed() {
+        Prefs.setDismissedKeys(dismissed.entries.map { it.key + "|" + it.value })
     }
 
     @Synchronized
@@ -489,6 +500,7 @@ object Recents {
         Prefs.setRecentKeys(session)
         val pkg = key.substringBefore('/')
         dismissed[pkg] = System.currentTimeMillis()
+        saveDismissed()
     }
 
     @Synchronized
@@ -498,6 +510,7 @@ object Recents {
         for (k in keys) dismissed[k.substringBefore('/')] = now
         session.clear()
         Prefs.setRecentKeys(session)
+        saveDismissed()
     }
 
     @Synchronized

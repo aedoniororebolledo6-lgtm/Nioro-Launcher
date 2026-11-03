@@ -139,8 +139,11 @@ class FanView(ctx: Context) : AppsView(ctx) {
                     val right = cx - size / 2f - dp(8f)
                     rectTmp.set(right - tw, cy - dp(15f), right, cy + dp(15f))
                 }
-                glass.draw(c, rectTmp, dp(15f), al * 0.9f, false, S.SF_FAN_LABEL)
-                labelPaint.alpha = Tx.alpha(S.TX_FAN, al)
+                // el nombre sale del icono deslizándose hacia su lado
+                val lq = clamp01((q - 0.6f) / 0.4f)
+                rectTmp.offset((1f - lq) * dp(18f) * (if (onRight) -1f else 1f), 0f)
+                glass.draw(c, rectTmp, dp(15f), al * 0.9f * lq, false, S.SF_FAN_LABEL)
+                labelPaint.alpha = Tx.alpha(S.TX_FAN, al * lq)
                 c.save()
                 c.clipRect(rectTmp)
                 c.drawText(text, rectTmp.left + dp(13f), cy + dp(5.5f), labelPaint)

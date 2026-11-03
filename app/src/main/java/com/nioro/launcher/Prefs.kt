@@ -87,6 +87,8 @@ object Prefs {
     fun setKnownKeys(v: List<String>) = putList("knownKeys", v)
     fun recentKeys(): MutableList<String> = getList("recentKeys")
     fun setRecentKeys(v: List<String>) = putList("recentKeys", v)
+    fun dismissedKeys(): MutableList<String> = getList("dismissedKeys")
+    fun setDismissedKeys(v: List<String>) = putList("dismissedKeys", v)
 
     fun resetLayout() {
         s().edit().remove("homeKeys").remove("dockKeys").putBoolean("seeded", false).apply()

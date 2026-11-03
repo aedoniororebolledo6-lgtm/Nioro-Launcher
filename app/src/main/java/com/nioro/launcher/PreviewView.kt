@@ -73,11 +73,14 @@ class PreviewView(ctx: Context, private val kind: Int) : View(ctx) {
             PAGE -> { sp.tune(220f, 0.9f); sp.snap(0f); sp.to(1f) }
             BOUNCE -> {
                 bsp.snap(0f)
+                // mismos resortes y fuerza que el rebote real del dock (HomeView.bounce)
+                val f = S.p(S.BOUNCES_BASE + style.coerceIn(0, 4))
                 when (style) {
-                    0, 3 -> { bsp.stiffness = 120f; bsp.damping = 5f; bsp.velocity = 6.5f }
-                    1 -> { bsp.stiffness = 200f; bsp.damping = 8f; bsp.velocity = 5f }
-                    2 -> { bsp.stiffness = 90f; bsp.damping = 7f; bsp.velocity = 3.4f }
-                    else -> { bsp.stiffness = 160f; bsp.damping = 6f; bsp.velocity = 5.5f }
+                    0 -> { Mo.tune(bsp, S.MO_B_JUMP, 120f, 0.23f); bsp.velocity = 6.5f * f }
+                    1 -> { Mo.tune(bsp, S.MO_B_PULSE, 200f, 0.28f); bsp.velocity = 5f * f }
+                    2 -> { Mo.tune(bsp, S.MO_B_SPIN, 90f, 0.37f); bsp.velocity = 3.4f * f }
+                    3 -> { Mo.tune(bsp, S.MO_B_WAVE, 120f, 0.23f); bsp.velocity = 6.5f * f }
+                    else -> { Mo.tune(bsp, S.MO_B_SHAKE, 160f, 0.24f); bsp.velocity = 5.5f * f }
                 }
                 bsp.to(0f)
             }

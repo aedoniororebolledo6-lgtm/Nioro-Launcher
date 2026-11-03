@@ -60,7 +60,11 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
         }
     }
 
-    private val maxBalls = 90
+    private val rim = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        style = android.graphics.Paint.Style.STROKE
+        color = android.graphics.Color.WHITE
+    }
+    private val shine = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.WHITE }
 
     override fun onDataChanged() {
         if (width > 0 && progress > 0.01f) build()
@@ -230,6 +234,13 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
             c.rotate(Math.toDegrees(b.body.angle.toDouble()).toFloat(), cx, cy)
             drawIcon(c, b.e, cx, cy, size, a)
             c.restore()
+            // borde y reflejo fijos (no giran con la esfera): parecen bolas de cristal
+            val r = b.r * ppm
+            rim.strokeWidth = dp(1.2f)
+            rim.alpha = (70 * a).toInt()
+            c.drawCircle(cx, cy, r * 0.97f, rim)
+            shine.alpha = (55 * a).toInt()
+            c.drawCircle(cx - r * 0.36f, cy - r * 0.42f, r * 0.16f, shine)
         }
     }
 

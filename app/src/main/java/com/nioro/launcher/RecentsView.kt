@@ -173,7 +173,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
                 sc = lerp(0.7f, 1f, q)
                 outA = clamp01(q * 1.5f)
                 out.set(cx - cw / 2f * sc, y - ch2 / 2f * sc, cx + cw / 2f * sc, y + ch2 / 2f * sc)
-                if (i == dismissIdx) out.offset(0f, dismissY.value)
+                if (i == dismissIdx) applyDismiss(out)
                 if (closingAll) {
                     out.offset(0f, -closeAllSp.value * h * 0.7f)
                     outA *= 1f - clamp01(closeAllSp.value * 1.3f)
@@ -191,7 +191,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
                 val ss = s * lerp(0.2f, 1f, q)
                 outA = clamp01(q * 2f)
                 out.set(cx - ss / 2f, y - ss / 2f, cx + ss / 2f, y + ss / 2f)
-                if (i == dismissIdx) out.offset(0f, dismissY.value)
+                if (i == dismissIdx) applyDismiss(out)
                 if (closingAll) {
                     out.offset(0f, -closeAllSp.value * h * 0.7f)
                     outA *= 1f - clamp01(closeAllSp.value * 1.3f)
@@ -205,7 +205,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
         sc *= enter
         outA *= clamp01(q * 1.6f)
         out.set(cx - cw / 2f * sc, y - ch / 2f * sc, cx + cw / 2f * sc, y + ch / 2f * sc)
-        if (i == dismissIdx) out.offset(0f, dismissY.value)
+        if (i == dismissIdx) applyDismiss(out)
         if (closingAll) {
             out.offset(0f, -closeAllSp.value * h * (0.6f + abs(o) * 0.1f))
             outA *= 1f - clamp01(closeAllSp.value * 1.3f)
@@ -215,9 +215,30 @@ class RecentsView(ctx: Context) : View0(ctx) {
 
     private fun sqrtI(i: Int): Float = kotlin.math.sqrt(i.toFloat())
 
+    /** la tarjeta que se arrastra hacia arriba se encoge y se desvanece mientras sube */
+    private fun applyDismiss(out: RectF) {
+        val dy = dismissY.value
+        out.offset(0f, dy)
+        val k = clamp01(-dy / (height * 0.45f))
+        if (k > 0f) {
+            val ix = out.width() * 0.1f * k
+            val iy = out.height() * 0.1f * k
+            out.inset(ix, iy)
+            outA *= 1f - 0.7f * k
+        }
+    }
+
+    /** tarjeta pulsada: se hunde un poco antes de abrirse */
+    private val pressK = ticker.add(SpringValue(1f, 600f, 40f, 0.0005f))
+    private var pressIdx = -1
+
     override fun onDraw(c: Canvas) {
         val a = clamp01(progress * 1.6f)
         if (items.isEmpty()) {
+            // estado vacío: icono de recientes en cristal sobre el texto
+            r.set(width / 2f - dp(38f), height / 2f - dp(124f), width / 2f + dp(38f), height / 2f - dp(48f))
+            glass.draw(c, r, dp(38f), a * 0.85f, true, S.SF_RECENT_CARD)
+            Glyphs.draw(c, Glyphs.RECENTS, r.centerX(), r.centerY(), dp(36f), Color.WHITE, a)
             big.alpha = (255 * a).toInt()
             c.drawText("No hay apps recientes", width / 2f, height / 2f, big)
             hint.alpha = (200 * a).toInt()
@@ -235,6 +256,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
             val e = items[i]
             c.save()
             if (outRot != 0f) Rot3D.apply(c, outRot, r.centerX(), r.centerY())
+            if (i == pressIdx && pressK.value != 1f) c.scale(pressK.value, pressK.value, r.centerX(), r.centerY())
             if (style == 4) {
                 val rad = r.width() / 2f
                 glass.draw(c, r, rad, al, true, S.SF_RECENT_CARD)
@@ -327,6 +349,12 @@ class RecentsView(ctx: Context) : View0(ctx) {
                 wasMoving = (style == 3 && gridScroll.isMoving) || pos.active
                 gridScroll.stop()
                 hitIdx = hit(x, y)
+                if (hitIdx >= 0) {
+                    pressIdx = hitIdx
+                    Mo.tune(pressK, S.MO_PRESS, 600f, 1f)
+                    pressK.to(0.96f)
+                    ticker.kick()
+                }
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
@@ -334,6 +362,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
                 val dx = x - downX
                 val dy = y - downY
                 if (mode == 0 && (abs(dx) > slop || abs(dy) > slop)) {
+                    releasePress()
                     mode = if (S.b(S.RC_SWIPE) && hitIdx >= 0 && dy < 0 && abs(dy) > abs(dx) * 1.2f) 2 else 1
                     if (mode == 2) {
                         dismissIdx = hitIdx
@@ -367,6 +396,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
                 val vx = vt?.xVelocity ?: 0f
                 val vy = vt?.yVelocity ?: 0f
                 val up = ev.actionMasked == MotionEvent.ACTION_UP
+                releasePress()
                 when (mode) {
                     1 -> {
                         if (style == 3) {
@@ -418,6 +448,13 @@ class RecentsView(ctx: Context) : View0(ctx) {
             }
         }
         return true
+    }
+
+    private fun releasePress() {
+        if (pressK.target >= 1f) return
+        Mo.tune(pressK, S.MO_RELEASE, 420f, 0.5f)
+        pressK.to(1f)
+        ticker.kick()
     }
 
     private fun removeAt(idx: Int) {

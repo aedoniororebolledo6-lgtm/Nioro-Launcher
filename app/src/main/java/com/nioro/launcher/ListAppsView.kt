@@ -31,6 +31,9 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
     private val letters = ArrayList<Char>()
     private val rect = RectF()
     private val names = HashMap<String, String>()
+    /** la burbuja del índice aparece y se va con un rebote */
+    private val bubbleSp = ticker.add(SpringValue(0f, 420f, 22f, 0.002f))
+    private val accentPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var nameW = 0f
     private var rowH = 0f
     private var headH = 0f
@@ -44,6 +47,8 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
     private var downRow = -1
     private var longFired = false
     private var wasMoving = false
+    private var atTop = false
+    private var closing = false
     private var onIndex = false
     private var bubbleChar = ' '
     private var vt: VelocityTracker? = null
@@ -173,19 +178,32 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
             }
         }
         c.restore()
-        // índice A-Z
+        // índice A-Z: la letra de la sección visible se resalta
         if (letters.size > 1 && S.b(S.LIST_INDEX)) {
             val top = panel.top + dp(18f)
             val ih = (panel.height() - dp(36f)) / letters.size
+            val cur = currentLetter()
             for (i in 0 until letters.size) {
+                val y = top + i * ih + ih * 0.5f
+                if (letters[i] == cur) {
+                    accentPaint.color = OneColors.ACCENT
+                    accentPaint.alpha = (220 * a).toInt()
+                    c.drawCircle(panel.right - dp(16f), y, min(ih * 0.5f, dp(9f)), accentPaint)
+                }
                 idxPaint.alpha = (230 * a).toInt()
-                c.drawText(letters[i].toString(), panel.right - dp(16f), top + i * ih + ih * 0.5f + dp(4f), idxPaint)
+                c.drawText(letters[i].toString(), panel.right - dp(16f), y + dp(4f), idxPaint)
             }
         }
-        if (onIndex && bubbleChar != ' ') {
-            rect.set(width / 2f - dp(42f), height / 2f - dp(42f), width / 2f + dp(42f), height / 2f + dp(42f))
-            glass.draw(c, rect, dp(26f), 1f, true, S.SF_BUBBLE)
+        val bs = bubbleSp.value
+        if (bs > 0.01f && bubbleChar != ' ') {
+            val r = dp(42f) * bs
+            rect.set(width / 2f - r, height / 2f - r, width / 2f + r, height / 2f + r)
+            glass.draw(c, rect, dp(26f) * bs, clamp01(bs), true, S.SF_BUBBLE)
+            bubblePaint.alpha = (255 * clamp01(bs)).toInt()
+            c.save()
+            c.scale(bs, bs, rect.centerX(), rect.centerY())
             c.drawText(bubbleChar.toString(), rect.centerX(), rect.centerY() + dp(12f), bubblePaint)
+            c.restore()
         }
         c.restore()
     }
@@ -204,6 +222,16 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
             if (ly >= r.y && ly < r.y + h) return if (r.entry != null) i else -1
         }
         return -1
+    }
+
+    /** letra de la sección que está arriba de la lista ahora mismo */
+    private fun currentLetter(): Char {
+        var cur = ' '
+        for (r in rows) {
+            if (r.entry != null) continue
+            if (r.y <= scroll.value + dp(4f)) cur = r.header else break
+        }
+        return cur
     }
 
     private fun jumpToIndex(y: Float) {
@@ -232,6 +260,8 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
                 vt?.addMovement(ev)
                 wasMoving = scroll.isMoving
                 scroll.stop()
+                atTop = scroll.value <= scroll.min + 1f
+                closing = false
                 downX = x
                 downY = y
                 lastY = y
@@ -239,6 +269,9 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
                 longFired = false
                 onIndex = S.b(S.LIST_INDEX) && letters.size > 1 && panel.contains(x, y) && x > panel.right - dp(34f)
                 if (onIndex) {
+                    Mo.tune(bubbleSp, S.MO_MENU, 420f, 0.55f)
+                    bubbleSp.to(1f)
+                    ticker.kick()
                     jumpToIndex(y)
                     return true
                 }
@@ -263,6 +296,11 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
                 unpress()
                 }
                 if (moved) {
+                    // desde arriba del todo, tirar hacia abajo cierra la vista
+                    if (atTop && !closing && S.b(S.DR_SWIPE_CLOSE) && y - downY > dp(120f) && abs(y - downY) > abs(x - downX) * 1.4f) {
+                        closing = true
+                        listener?.onClose()
+                    }
                     scroll.drag(-(y - lastY))
                     invalidate()
                 }
@@ -276,6 +314,9 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
                 vt?.addMovement(ev)
                 if (onIndex) {
                     onIndex = false
+                    Mo.tune(bubbleSp, S.MO_MENU, 420f, 1f)
+                    bubbleSp.to(0f)
+                    ticker.kick()
                     invalidate()
                 } else if (moved) {
                     vt?.computeCurrentVelocity(1000)

@@ -45,6 +45,11 @@ abstract class AppsView(ctx: Context) : View(ctx) {
     protected val dst = RectF()
     private val labelCache = HashMap<String, String>()
     protected val pressSp: SpringValue = ticker.add(SpringValue(1f, 700f, 53f, 0.0005f))
+    /** al cambiar la búsqueda los resultados aparecen con un pequeño "pop" (0 -> 1) */
+    private val filterSp: SpringValue = ticker.add(SpringValue(1f, 380f, 30f, 0.002f))
+    /** hay texto buscado pero ninguna app coincide */
+    val noResults: Boolean get() = queryText.isNotEmpty() && shown.isEmpty()
+    val query: String get() = queryText
     /** zona de iconos de esta vista (S.IA_*) para sus ajustes propios */
     abstract val iconArea: Int
     protected val longMs: Long get() = S.f(S.G_ICON_LONG_MS).toLong()
@@ -84,8 +89,14 @@ abstract class AppsView(ctx: Context) : View(ctx) {
     }
 
     fun setQuery(q: String) {
-        queryText = q.trim().lowercase(Locale.getDefault())
+        val nq = q.trim().lowercase(Locale.getDefault())
+        if (nq == queryText) return
+        queryText = nq
         refilter()
+        Mo.tune(filterSp, S.MO_DRAWER_OPEN, 380f, 0.7f)
+        filterSp.snap(0.55f)
+        filterSp.to(1f)
+        ticker.kick()
     }
 
     private fun refilter() {
@@ -130,13 +141,14 @@ abstract class AppsView(ctx: Context) : View(ctx) {
         val al = (255f * a).toInt().coerceIn(0, 255)
         if (al == 0) return
         if (pressKey != null && !pressSp.active && pressSp.target >= 1f) pressKey = null
-        val sz = (if (e.key == pressKey) size * pressSp.value else size) * IconFx.scale(iconArea)
-        IconFx.draw(c, b, e.tint, cx, cy, sz, a, iconArea)
+        val f = filterSp.value
+        val sz = (if (e.key == pressKey) size * pressSp.value else size) * IconFx.scale(iconArea) * f
+        IconFx.draw(c, b, e.tint, cx, cy, sz, a * clamp01(f * 1.6f - 0.6f), iconArea)
     }
 
     protected fun drawLabel(c: Canvas, e: AppEntry, cx: Float, y: Float, maxW: Float, a: Float) {
         if (!Prefs.labels || !S.b(S.DR_LABELS)) return
-        val al = Tx.alpha(S.TX_LABEL_DRAWER, a)
+        val al = Tx.alpha(S.TX_LABEL_DRAWER, a * clamp01(filterSp.value * 2f - 1f))
         if (al == 0) return
         textPaint.alpha = al
         c.drawText(labelOf(e, maxW), cx, y + Tx.dy(S.TX_LABEL_DRAWER), textPaint)

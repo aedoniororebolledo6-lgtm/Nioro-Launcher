@@ -137,7 +137,8 @@ class OpenOverlay(ctx: Context) : View(ctx) {
 
 /** Menú contextual de cristal (mantener presionado), con aparición de resorte. */
 class MenuView(ctx: Context) : View(ctx) {
-    class Item(val label: String, val action: () -> Unit)
+    /** [glyph] = icono de la opción (Glyphs.*), -1 sin icono */
+    class Item(val label: String, val glyph: Int = -1, val action: () -> Unit)
 
     private val sp = SpringValue(0f, 340f, 22f, 0.002f)
     private val ticker = Ticker { invalidate(); false }
@@ -152,6 +153,13 @@ class MenuView(ctx: Context) : View(ctx) {
     private var title = ""
     private var pressed = -1
     private var above = true
+    private var headIcon: android.graphics.Bitmap? = null
+    private val headDst = RectF()
+    private val headPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val hiRect = RectF()
+    /** el resaltado se desliza hasta la opción tocada y aparece/desaparece suave */
+    private val hiY = SpringValue(0f, 700f, 45f, 0.3f)
+    private val hiA = SpringValue(0f, 600f, 45f, 0.003f)
     private val rowH get() = dp(S.f(S.M_ROW))
     private val headH get() = dp(46f)
     var showing = false
@@ -159,6 +167,8 @@ class MenuView(ctx: Context) : View(ctx) {
 
     init {
         ticker.add(sp)
+        ticker.add(hiY)
+        ticker.add(hiA)
         text.color = Color.WHITE
         text.textSize = dp(16f)
         sep.color = 0x30FFFFFF
@@ -167,8 +177,10 @@ class MenuView(ctx: Context) : View(ctx) {
         visibility = INVISIBLE
     }
 
-    fun show(t: String, a: RectF, list: List<Item>) {
+    fun show(t: String, a: RectF, list: List<Item>, icon: android.graphics.Bitmap? = null) {
         title = t
+        headIcon = icon
+        hiA.snap(0f)
         items = list
         anchor.set(a)
         val vw = (if (width > 0) width else resources.displayMetrics.widthPixels).toFloat()
@@ -209,17 +221,37 @@ class MenuView(ctx: Context) : View(ctx) {
         c.scale(s, s, anchor.centerX().coerceIn(box.left, box.right), py)
         glass.draw(c, box, dp(24f), a, true, S.SF_MENU)
         val base = text.textSize
+        // cabecera: icono de la app + nombre
+        var tx = box.left + dp(20f)
+        val ic = headIcon
+        if (ic != null) {
+            val s = dp(26f)
+            headDst.set(box.left + dp(16f), box.top + headH / 2f - s / 2f, box.left + dp(16f) + s, box.top + headH / 2f + s / 2f)
+            headPaint.alpha = (255 * a).toInt()
+            c.drawBitmap(ic, null, headDst, headPaint)
+            tx = headDst.right + dp(10f)
+        }
         text.alpha = Tx.alpha(S.TX_MENU, a * 0.67f)
         text.textSize = base * 0.85f
-        c.drawText(Tx.str(S.TX_MENU, title), box.left + dp(20f), box.top + dp(29f), text)
+        c.drawText(Tx.str(S.TX_MENU, title), tx, box.top + dp(29f), text)
         text.textSize = base
+        // resaltado redondeado que se desliza entre opciones
+        if (hiA.value > 0.01f) {
+            hiRect.set(box.left + dp(8f), hiY.value + dp(3f), box.right - dp(8f), hiY.value + rowH - dp(3f))
+            hi.alpha = (48 * hiA.value * a).toInt().coerceIn(0, 255)
+            c.drawRoundRect(hiRect, dp(14f), dp(14f), hi)
+        }
+        val anyGlyph = items.any { it.glyph >= 0 }
         for (i in items.indices) {
-            val top = box.top + headH + i * rowH
-            if (i == pressed) c.drawRect(box.left + dp(6f), top, box.right - dp(6f), top + rowH, hi)
-            sep.alpha = (48 * a).toInt()
+            // las opciones entran escalonadas, una detrás de otra
+            val q = clamp01(p * 1.5f - i * 0.1f)
+            val top = box.top + headH + i * rowH + (1f - q) * dp(10f)
+            sep.alpha = (48 * a * q).toInt()
             c.drawLine(box.left + dp(16f), top, box.right - dp(16f), top, sep)
-            text.alpha = Tx.alpha(S.TX_MENU, a)
-            c.drawText(Tx.str(S.TX_MENU, items[i].label), box.left + dp(20f), top + rowH / 2f + dp(6f) + Tx.dy(S.TX_MENU), text)
+            text.alpha = Tx.alpha(S.TX_MENU, a * q)
+            val lx = if (anyGlyph) box.left + dp(54f) else box.left + dp(20f)
+            if (items[i].glyph >= 0) Glyphs.draw(c, items[i].glyph, box.left + dp(31f), top + rowH / 2f, dp(20f), Color.WHITE, a * q * 0.9f)
+            c.drawText(Tx.str(S.TX_MENU, items[i].label), lx, top + rowH / 2f + dp(6f) + Tx.dy(S.TX_MENU), text)
         }
         c.restore()
     }
@@ -236,7 +268,11 @@ class MenuView(ctx: Context) : View(ctx) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
                 val i = idxAt(ev.x, ev.y)
                 if (i != pressed) {
+                    val ty = box.top + headH + max(0, i) * rowH
+                    if (pressed < 0 || hiA.value < 0.05f) hiY.snap(ty) else hiY.to(ty)
+                    hiA.to(if (i >= 0) 1f else 0f)
                     pressed = i
+                    ticker.kick()
                     invalidate()
                 }
             }

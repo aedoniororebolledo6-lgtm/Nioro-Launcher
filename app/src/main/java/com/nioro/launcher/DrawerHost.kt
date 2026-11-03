@@ -41,6 +41,12 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
     private var viewStyle = -1
     private val search = EditText(ctx)
     private val scrim = Paint()
+    private val emptyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textAlign = Paint.Align.CENTER
+    }
+    private val emptyRect = RectF()
+    private val emptyGlass = Glass()
     private var scrimShader: LinearGradient? = null
     private var insetTop = 0f
     private var insetBottom = 0f
@@ -91,11 +97,17 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
                 else -> moreDown
             }
         }
+        // al tocar la barra crece un poco con rebote
+        search.setOnFocusChangeListener { v, f ->
+            v.animate().scaleX(if (f) 1.03f else 1f).scaleY(if (f) 1.03f else 1f)
+                .setInterpolator(android.view.animation.OvershootInterpolator(2.2f)).setDuration(260).start()
+        }
         search.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun afterTextChanged(s: Editable?) {
                 view?.setQuery(s?.toString() ?: "")
+                invalidate() // para mostrar u ocultar "Sin resultados"
             }
         })
         search.setOnEditorActionListener { _, id, ev ->
@@ -199,10 +211,13 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
         search.setText("")
         if (!isOpen) {
             isOpen = true
-            visibility = VISIBLE
-            v.progress = 0f
-            sp.snap(0f)
-            v.post { if (isOpen && view === v) v.onOpen() }
+            // si aún se estaba cerrando, la animación da la vuelta desde donde va (sin saltar a 0)
+            if (visibility != VISIBLE) {
+                visibility = VISIBLE
+                v.progress = 0f
+                sp.snap(0f)
+                v.post { if (isOpen && view === v) v.onOpen() }
+            }
             if (Prefs.drawerStyle == 4) Mo.tune(sp, S.MO_DRAWER_OPEN, 140f, 1f) else Mo.tune(sp, S.MO_DRAWER_OPEN, 230f, 0.82f)
             search.visibility = if (S.b(S.DR_SEARCH)) View.VISIBLE else View.GONE
             search.textSize = 16f * S.p(S.tp(S.TX_SEARCH, S.TP_SIZE))
@@ -283,6 +298,12 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
         val a = clamp01(p)
         search.alpha = a
         search.translationY = (1f - a) * -dp(30f)
+        if (!search.hasFocus()) {
+            // la barra entra desde arriba creciendo, con el resorte de la vista de apps
+            val s = lerp(0.9f, 1f, clamp01(p))
+            search.scaleX = s
+            search.scaleY = s
+        }
         callback?.onProgress(a)
         invalidate()
         if (!sp.active && !isOpen && p <= 0.001f) {
@@ -302,6 +323,25 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
         scrim.shader = scrimShader
         scrim.alpha = (255 * a * S.p(S.DR_DIM) * (if (Prefs.drawerStyle == 1 || Prefs.drawerStyle == 2) 0.75f else 1f)).toInt().coerceIn(0, 255)
         c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), scrim)
+    }
+
+    /** "Sin resultados": se dibuja encima de la vista cuando la búsqueda no encuentra nada */
+    override fun dispatchDraw(c: Canvas) {
+        super.dispatchDraw(c)
+        val v = view ?: return
+        if (!v.noResults) return
+        val a = clamp01(sp.value)
+        val cx = width / 2f
+        val cy = height * 0.42f
+        emptyRect.set(cx - dp(34f), cy - dp(34f), cx + dp(34f), cy + dp(34f))
+        emptyGlass.draw(c, emptyRect, dp(34f), a * 0.8f, true, S.SF_SEARCH)
+        Glyphs.draw(c, Glyphs.SEARCH, cx, cy, dp(34f), Color.WHITE, a)
+        emptyPaint.textSize = dp(18f)
+        emptyPaint.alpha = (255 * a).toInt()
+        c.drawText("Sin resultados", cx, cy + dp(66f), emptyPaint)
+        emptyPaint.textSize = dp(14f)
+        emptyPaint.alpha = (170 * a).toInt()
+        c.drawText("Ninguna app coincide con «" + v.query + "»", cx, cy + dp(92f), emptyPaint)
     }
 
     override fun onDetachedFromWindow() {
