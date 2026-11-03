@@ -53,10 +53,13 @@ class PreviewView(ctx: Context, private val kind: Int) : View(ctx) {
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        postDelayed({ play() }, 300)
+        postDelayed(playRun, 300)
     }
 
+    private val playRun = Runnable { play() }
+
     override fun onDetachedFromWindow() {
+        removeCallbacks(playRun)
         ticker.stop()
         super.onDetachedFromWindow()
     }

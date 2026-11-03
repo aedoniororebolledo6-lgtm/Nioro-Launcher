@@ -97,6 +97,7 @@ class SettingsActivity : Activity() {
     private var insetBottom = 0
     private val ease = PathInterpolator(0.22f, 0.25f, 0f, 1f) // curva de One UI
     private var heroStatus: (() -> Unit)? = null
+    private var triedHomeSettings = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -129,6 +130,11 @@ class SettingsActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
+        // algunas capas (MIUI) cancelan el diálogo al instante: se abre el ajuste del sistema
+        if (requestCode == REQ_HOME && !isDefaultHome() && resultCode != RESULT_OK && !triedHomeSettings) {
+            triedHomeSettings = true
+            tryStart(Intent(Settings.ACTION_HOME_SETTINGS))
+        }
         heroStatus?.invoke()
     }
 
@@ -145,27 +151,41 @@ class SettingsActivity : Activity() {
     }
 
     // ---------------------------------------------------------------- Navegación
+    private var navBusy = false
+
     private fun push(v: View, animate: Boolean = true) {
+        if (navBusy) return
         val prev = pages.lastOrNull()
         pages.add(v)
         stack.addView(v, FrameLayout.LayoutParams(-1, -1))
         if (animate && prev != null) {
+            navBusy = true
             val w = stack.width.toFloat().coerceAtLeast(1f)
             v.translationX = w
-            v.animate().translationX(0f).setDuration(420).setInterpolator(ease).start()
-            prev.animate().translationX(-w * 0.28f).alpha(0.4f).setDuration(420).setInterpolator(ease).start()
+            v.animate().translationX(0f).setDuration(420).setInterpolator(ease).withEndAction { navBusy = false }.start()
+            prev.animate().translationX(-w * 0.28f).alpha(0f).setDuration(420).setInterpolator(ease)
+                .withEndAction { prev.visibility = View.INVISIBLE }.start()
         } else if (prev != null) {
             prev.translationX = -stack.width * 0.28f
             prev.alpha = 0f
+            prev.visibility = View.INVISIBLE
         }
     }
 
     private fun pop() {
-        if (pages.size < 2) return
+        if (pages.size < 2 || navBusy) return
+        navBusy = true
         val top = pages.removeAt(pages.size - 1)
         val prev = pages.last()
         val w = stack.width.toFloat()
-        top.animate().translationX(w).setDuration(380).setInterpolator(ease).withEndAction { stack.removeView(top) }.start()
+        // la página que sale ya no responde a toques
+        (top as? FrameLayout)?.addView(View(this).apply { isClickable = true }, FrameLayout.LayoutParams(-1, -1))
+        prev.visibility = View.VISIBLE
+        top.animate().translationX(w).setDuration(380).setInterpolator(ease)
+            .withEndAction {
+                stack.removeView(top)
+                navBusy = false
+            }.start()
         prev.animate().translationX(0f).alpha(1f).setDuration(380).setInterpolator(ease).start()
         heroStatus?.invoke()
     }
@@ -401,6 +421,7 @@ class SettingsActivity : Activity() {
     }
 
     private fun makeDefault() {
+        triedHomeSettings = false
         try {
             val rm = getSystemService(RoleManager::class.java)
             if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_HOME) && !rm.isRoleHeld(RoleManager.ROLE_HOME)) {
@@ -680,13 +701,16 @@ class HeroView(ctx: Context) : View(ctx) {
         clock.typeface = Typeface.create(Typeface.DEFAULT, 200, false)
     }
 
+    private val startRun = Runnable { ticker.kick() }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         t = 0f
-        postDelayed({ ticker.kick() }, 350)
+        postDelayed(startRun, 350)
     }
 
     override fun onDetachedFromWindow() {
+        removeCallbacks(startRun)
         ticker.stop()
         super.onDetachedFromWindow()
     }

@@ -931,6 +931,7 @@ class HomeView(ctx: Context) : View(ctx) {
                     vt?.computeCurrentVelocity(1000)
                     settle(-(vt?.xVelocity ?: 0f) / (width * s))
                 } else if (!moved && ev.actionMasked == MotionEvent.ACTION_UP) {
+                    if (pageSp.value != pageSp.value.roundToInt().toFloat()) settle(0f)
                     val b = editBtnAt(x, y)
                     exitEdit()
                     if (b >= 0) {
@@ -947,6 +948,8 @@ class HomeView(ctx: Context) : View(ctx) {
 
     override fun onTouchEvent(ev: MotionEvent): Boolean {
         if (isEditing) return editTouch(ev)
+        // mientras se cierra el modo edición las páginas aún están encogidas: se ignoran toques
+        if (editSp.value > 0.02f) return true
         val x = ev.x
         val y = ev.y
         when (ev.actionMasked) {

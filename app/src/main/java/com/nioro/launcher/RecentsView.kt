@@ -300,6 +300,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
     private fun maxPos(): Float = max(0, items.size - 1).toFloat()
 
     override fun onTouchEvent(ev: MotionEvent): Boolean {
+        if (closingAll) return true
         val x = ev.x
         val y = ev.y
         when (ev.actionMasked) {

@@ -281,12 +281,29 @@ class OneSlider(ctx: Context, private val min: Int, private val max: Int, start:
         c.drawCircle(x, height / 2f, dp(10f) + dp(2f) * g, thumb)
     }
 
+    private var downX = 0f
+    private var downY = 0f
+    private var dragging = false
+    private val slop = android.view.ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
+
     override fun onTouchEvent(e: MotionEvent): Boolean {
         val pad = dp(14f)
         when (e.actionMasked) {
-            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
-                parent?.requestDisallowInterceptTouchEvent(true)
-                if (e.actionMasked == MotionEvent.ACTION_DOWN) {
+            MotionEvent.ACTION_DOWN -> {
+                // aún no se sabe si es desplazar la página o mover el deslizador
+                downX = e.x
+                downY = e.y
+                dragging = false
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (!dragging) {
+                    val dx = kotlin.math.abs(e.x - downX)
+                    val dy = kotlin.math.abs(e.y - downY)
+                    if (dy > slop && dy > dx) return false // la página se desplaza
+                    if (dx <= slop) return true
+                    dragging = true
+                    parent?.requestDisallowInterceptTouchEvent(true)
                     grow.to(1f)
                     ticker.kick()
                 }
@@ -299,7 +316,23 @@ class OneSlider(ctx: Context, private val min: Int, private val max: Int, start:
                 }
                 invalidate()
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+            MotionEvent.ACTION_UP -> {
+                if (!dragging) {
+                    // toque simple: salta al valor tocado
+                    val f = clamp01((e.x - pad) / (width - pad * 2f))
+                    val v = Math.round(min + f * (max - min))
+                    if (v != value) {
+                        value = v
+                        onChange?.invoke(v)
+                    }
+                    invalidate()
+                }
+                dragging = false
+                grow.to(0f)
+                ticker.kick()
+            }
+            MotionEvent.ACTION_CANCEL -> {
+                dragging = false
                 grow.to(0f)
                 ticker.kick()
             }

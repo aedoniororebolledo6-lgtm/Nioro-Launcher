@@ -46,6 +46,7 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
     var isOpen = false
         private set
     private var anchorX = 0f
+    private var moreDown = false
 
     init {
         setWillNotDraw(false)
@@ -66,11 +67,28 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
         search.compoundDrawablePadding = dp(12f).toInt()
         @Suppress("ClickableViewAccessibility")
         search.setOnTouchListener { v, ev ->
-            if (ev.actionMasked == android.view.MotionEvent.ACTION_UP && ev.x > v.width - dp(48f)) {
-                hideKeyboard()
-                callback?.openSettings()
-                true
-            } else false
+            when (ev.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    moreDown = ev.x > v.width - dp(48f)
+                    moreDown // si es en ⋮ el EditText no recibe nada (ni foco ni pulsación larga)
+                }
+                android.view.MotionEvent.ACTION_UP -> {
+                    if (moreDown) {
+                        moreDown = false
+                        if (ev.x > v.width - dp(56f)) {
+                            hideKeyboard()
+                            callback?.openSettings()
+                        }
+                        true
+                    } else false
+                }
+                android.view.MotionEvent.ACTION_CANCEL -> {
+                    val was = moreDown
+                    moreDown = false
+                    was
+                }
+                else -> moreDown
+            }
         }
         search.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
