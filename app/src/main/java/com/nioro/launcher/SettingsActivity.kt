@@ -60,6 +60,11 @@ class SettingsActivity : Activity() {
             "Los iconos caen como esferas con física real"
         )
         val CLOCK = arrayOf("Nioro", "One UI apilado", "Sin reloj")
+        val THEMES = arrayOf("Liquid Glass", "One UI", "Minimal", "Neón", "Oscuro total", "Cristal claro", "Juguetón", "Rendimiento")
+        val THEME_COLORS = intArrayOf(
+            0xFF3E91FF.toInt(), 0xFF2F7BFF.toInt(), 0xFF64748B.toInt(), 0xFFD946EF.toInt(),
+            0xFF1F2937.toInt(), 0xFF7DD3FC.toInt(), 0xFFFB923C.toInt(), 0xFF22C55E.toInt()
+        )
         val SHAPES = arrayOf("Squircle", "Círculo", "One UI", "Gota", "Cristal")
         val SHAPE_DESC = arrayOf(
             "Curva continua como los iconos del iPhone",
@@ -306,6 +311,26 @@ class SettingsActivity : Activity() {
         val up = card(c, dp(6f).toInt())
         updateRow(up)
 
+        // Ajustes avanzados (motor de ajustes con buscador)
+        val adv = card(c, dp(6f).toInt())
+        val ar = LinearLayout(this)
+        ar.orientation = LinearLayout.HORIZONTAL
+        ar.gravity = Gravity.CENTER_VERTICAL
+        ar.setPadding(dp(14f).toInt(), dp(10f).toInt(), dp(10f).toInt(), dp(10f).toInt())
+        ar.background = ripple(dp(22f))
+        ar.addView(CategoryIconView(this, Glyphs.GEAR, OneColors.ACCENT), LinearLayout.LayoutParams(dp(42f).toInt(), dp(42f).toInt()))
+        val at = LinearLayout(this)
+        at.orientation = LinearLayout.VERTICAL
+        at.setPadding(dp(16f).toInt(), 0, dp(8f).toInt(), 0)
+        at.addView(text("Ajustes avanzados", 17f, 600))
+        at.addView(text(S.count().toString() + " ajustes · busca cualquiera", 13.5f, 400, OneColors.SUB).apply { setPadding(0, dp(2f).toInt(), 0, 0) })
+        ar.addView(at, LinearLayout.LayoutParams(0, -2, 1f))
+        val ch = View(this)
+        ch.background = GlyphDrawable(Glyphs.CHEVRON, 18f, 0x80FFFFFF.toInt())
+        ar.addView(ch, LinearLayout.LayoutParams(dp(18f).toInt(), dp(18f).toInt()))
+        ar.setOnClickListener { push(buildAdvanced()) }
+        adv.addView(ar)
+
         // Categorías agrupadas como en los Ajustes de One UI
         val groups = arrayOf(intArrayOf(0, 1, 2), intArrayOf(3, 4), intArrayOf(5, 6), intArrayOf(7))
         for (g in groups) {
@@ -463,6 +488,273 @@ class SettingsActivity : Activity() {
         }
     }
 
+    // ---------------------------------------------------------------- Ajustes avanzados
+    private fun norm(x: String): String =
+        java.text.Normalizer.normalize(x.lowercase(), java.text.Normalizer.Form.NFD).replace(Regex("\\p{Mn}+"), "")
+
+    private fun buildAdvanced(): View = page("Ajustes avanzados", S.count().toString() + " ajustes", false) { c ->
+        // buscador
+        val sk = card(c, dp(8f).toInt())
+        val search = android.widget.EditText(this)
+        search.hint = "Buscar entre " + S.count() + " ajustes"
+        search.setHintTextColor(0x99FFFFFF.toInt())
+        search.setTextColor(Color.WHITE)
+        search.textSize = 16f
+        search.isSingleLine = true
+        search.background = null
+        search.setPadding(dp(16f).toInt(), dp(10f).toInt(), dp(16f).toInt(), dp(10f).toInt())
+        search.setCompoundDrawablesRelative(GlyphDrawable(Glyphs.SEARCH, 20f, 0xCCFFFFFF.toInt()), null, null, null)
+        search.compoundDrawablePadding = dp(12f).toInt()
+        sk.addView(search)
+        val results = LinearLayout(this)
+        results.orientation = LinearLayout.VERTICAL
+        c.addView(results)
+        val cats = LinearLayout(this)
+        cats.orientation = LinearLayout.VERTICAL
+        c.addView(cats)
+
+        // temas rápidos
+        val tk = card(cats)
+        tk.addView(text("Temas rápidos", 16.5f, 500).apply { setPadding(dp(20f).toInt(), 0, 0, dp(10f).toInt()) })
+        val hs = HorizontalScrollView(this)
+        hs.isHorizontalScrollBarEnabled = false
+        val row = LinearLayout(this)
+        row.setPadding(dp(14f).toInt(), 0, dp(14f).toInt(), 0)
+        for (i in THEMES.indices) {
+            val chip = text(THEMES[i], 14.5f, 500)
+            chip.setPadding(dp(16f).toInt(), dp(10f).toInt(), dp(16f).toInt(), dp(10f).toInt())
+            val g = GradientDrawable()
+            g.cornerRadius = dp(20f)
+            g.colors = intArrayOf(THEME_COLORS[i], blend(THEME_COLORS[i], 0xFF000000.toInt(), 0.35f))
+            chip.background = g
+            chip.foreground = ripple(dp(20f))
+            chip.setOnClickListener {
+                applyTheme(i)
+                Hx.fire(it, S.HE_SETTING)
+                toast("Tema \"" + THEMES[i] + "\" aplicado")
+            }
+            row.addView(chip, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(8f).toInt() })
+        }
+        hs.addView(row)
+        tk.addView(hs)
+
+        // categorías
+        val groups = arrayOf(intArrayOf(0, 1, 2), intArrayOf(3, 4, 5), intArrayOf(6, 7, 8, 9, 10), intArrayOf(11, 12, 13, 14))
+        for (g in groups) {
+            val k = card(cats, dp(6f).toInt())
+            for ((n, ci) in g.withIndex()) {
+                if (n > 0) divider(k, dp(72f))
+                val cnt = S.defs.count { it.cat == ci }
+                advRow(k, S.CAT_GLYPH[ci], S.CAT_COLOR[ci], S.CATS[ci], S.CAT_SUB[ci] + " · " + cnt) { push(buildAdvCat(ci)) }
+            }
+        }
+        val rk = card(cats, dp(6f).toInt())
+        button(rk, "Restablecer todos los ajustes avanzados", "Vuelve a los valores originales", Glyphs.BACK) {
+            S.resetAll()
+            toast("Ajustes avanzados restablecidos")
+        }
+
+        // búsqueda en vivo (con una pequeña espera para no recalcular en cada letra)
+        val h = android.os.Handler(android.os.Looper.getMainLooper())
+        var pending: Runnable? = null
+        search.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(x: CharSequence?, a: Int, b: Int, d: Int) {}
+            override fun onTextChanged(x: CharSequence?, a: Int, b: Int, d: Int) {}
+            override fun afterTextChanged(e: android.text.Editable?) {
+                pending?.let { h.removeCallbacks(it) }
+                val q = norm(e?.toString()?.trim() ?: "")
+                val r = Runnable {
+                    results.removeAllViews()
+                    if (q.length < 2) {
+                        cats.visibility = View.VISIBLE
+                        return@Runnable
+                    }
+                    cats.visibility = View.GONE
+                    val words = q.split(' ').filter { it.isNotEmpty() }
+                    val found = S.defs.filter { d ->
+                        val hay = norm(d.title + " " + d.group + " " + S.CATS[d.cat])
+                        words.all { hay.contains(it) }
+                    }
+                    results.addView(text(found.size.toString() + " resultados", 13.5f, 500, OneColors.SUB).apply { setPadding(dp(20f).toInt(), dp(16f).toInt(), 0, 0) })
+                    val k = card(results)
+                    for ((n, d) in found.take(60).withIndex()) {
+                        if (n > 0) divider(k, 0f)
+                        item(k, d, true)
+                    }
+                    if (found.size > 60) results.addView(text("Mostrando 60. Escribe más para afinar.", 13f, 400, OneColors.SUB).apply { setPadding(dp(20f).toInt(), dp(10f).toInt(), 0, 0) })
+                }
+                pending = r
+                h.postDelayed(r, 180)
+            }
+        })
+    }
+
+    private fun advRow(parent: LinearLayout, glyph: Int, color: Int, title: String, sub: String, run: () -> Unit) {
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.gravity = Gravity.CENTER_VERTICAL
+        row.setPadding(dp(14f).toInt(), dp(10f).toInt(), dp(10f).toInt(), dp(10f).toInt())
+        row.background = ripple(dp(22f))
+        row.setOnClickListener { run() }
+        row.addView(CategoryIconView(this, glyph, color), LinearLayout.LayoutParams(dp(42f).toInt(), dp(42f).toInt()))
+        val t = LinearLayout(this)
+        t.orientation = LinearLayout.VERTICAL
+        t.setPadding(dp(16f).toInt(), 0, dp(8f).toInt(), 0)
+        t.addView(text(title, 17f, 500))
+        t.addView(text(sub, 13.5f, 400, OneColors.SUB).apply { setPadding(0, dp(2f).toInt(), 0, 0) })
+        row.addView(t, LinearLayout.LayoutParams(0, -2, 1f))
+        val ch = View(this)
+        ch.background = GlyphDrawable(Glyphs.CHEVRON, 18f, 0x80FFFFFF.toInt())
+        row.addView(ch, LinearLayout.LayoutParams(dp(18f).toInt(), dp(18f).toInt()))
+        parent.addView(row)
+    }
+
+    /** categoría: lista de grupos (o los ajustes directamente si es un solo grupo) */
+    private fun buildAdvCat(ci: Int): View = page(S.CATS[ci], S.CAT_SUB[ci], false) { c ->
+        val groups = LinkedHashMap<String, Int>()
+        for (d in S.defs) if (d.cat == ci) groups[d.group] = (groups[d.group] ?: 0) + 1
+        if (groups.size == 1) {
+            val k = card(c)
+            for ((n, d) in S.defs.filter { it.cat == ci }.withIndex()) {
+                if (n > 0) divider(k, 0f)
+                item(k, d, false)
+            }
+        } else {
+            val k = card(c, dp(6f).toInt())
+            var n = 0
+            for ((g, cnt) in groups) {
+                if (n++ > 0) divider(k, dp(72f))
+                advRow(k, S.CAT_GLYPH[ci], S.CAT_COLOR[ci], g, cnt.toString() + " ajustes") { push(buildAdvGroup(ci, g)) }
+            }
+        }
+        val rk = card(c, dp(6f).toInt())
+        button(rk, "Restablecer " + S.CATS[ci].lowercase(), "Solo esta categoría", Glyphs.BACK) {
+            S.reset(ci)
+            toast("Restablecido")
+            pop()
+        }
+    }
+
+    private fun buildAdvGroup(ci: Int, g: String): View = page(g, S.CATS[ci], false) { c ->
+        val k = card(c)
+        for ((n, d) in S.defs.filter { it.cat == ci && it.group == g }.withIndex()) {
+            if (n > 0) divider(k, 0f)
+            item(k, d, false)
+        }
+        val rk = card(c, dp(6f).toInt())
+        button(rk, "Restablecer este grupo", null, Glyphs.BACK) {
+            S.reset(ci, g)
+            toast("Restablecido")
+            pop()
+        }
+    }
+
+    /** fila de un ajuste según su tipo */
+    private fun item(parent: LinearLayout, d: S.Def, showPath: Boolean) {
+        val title = if (showPath) d.title + "  ·  " + d.group else d.title
+        when (d.type) {
+            S.BOOL -> toggle(parent, title, d.desc, S.b(d.id)) { S.set(d.id, if (it) 1f else 0f) }
+            S.NUM -> slider(parent, title, d.min.toInt(), d.max.toInt(), S.f(d.id).toInt(), if (d.unit == "%") " %" else d.unit) { S.set(d.id, it.toFloat()) }
+            S.CHOICE -> choice(parent, title, d.opts ?: arrayOf(), S.i(d.id), -1, null) {
+                S.set(d.id, it.toFloat())
+            }
+            S.COLOR -> colorRow(parent, title, S.i(d.id)) { S.set(d.id, it.toFloat()) }
+        }
+    }
+
+    private fun colorRow(parent: LinearLayout, title: String, cur: Int, set: (Int) -> Unit) {
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        box.setPadding(dp(14f).toInt(), dp(8f).toInt(), dp(14f).toInt(), dp(8f).toInt())
+        val name = text(title + ": " + S.PAL_NAMES[cur.coerceIn(0, S.PAL.size - 1)], 16.5f, 500)
+        name.setPadding(dp(6f).toInt(), 0, 0, dp(10f).toInt())
+        box.addView(name)
+        val hs = HorizontalScrollView(this)
+        hs.isHorizontalScrollBarEnabled = false
+        val row = LinearLayout(this)
+        val dots = ArrayList<ColorDot>()
+        for (i in S.PAL.indices) {
+            val dv = ColorDot(this, S.PAL[i], i == 0)
+            dv.selected = i == cur
+            dv.setOnClickListener {
+                for (x in dots) {
+                    x.selected = false
+                    x.invalidate()
+                }
+                dv.selected = true
+                dv.invalidate()
+                name.text = title + ": " + S.PAL_NAMES[i]
+                Hx.fire(it, S.HE_SETTING)
+                set(i)
+            }
+            dots.add(dv)
+            row.addView(dv, LinearLayout.LayoutParams(dp(40f).toInt(), dp(40f).toInt()).apply { rightMargin = dp(6f).toInt() })
+        }
+        hs.addView(row)
+        box.addView(hs)
+        parent.addView(box)
+    }
+
+    /** temas rápidos: cambian de golpe muchos ajustes a la vez */
+    private fun applyTheme(i: Int) {
+        val allSurf = S.SF_NAMES.indices
+        fun glass(prop: Int, v: Float) { for (sf in allSurf) S.set(S.gp(sf, prop), v) }
+        when (i) {
+            0 -> { // Liquid Glass (original)
+                S.reset(S.C_GLASS); S.reset(S.C_ICON); S.reset(S.C_COLOR)
+                Prefs.iconShape = 0
+            }
+            1 -> { // One UI
+                Prefs.iconShape = 2
+                Prefs.clockStyle = 1
+                S.set(S.D_STYLE, 4f)
+                S.set(S.K_SHAPE, 0f)
+                glass(S.GP_TINT, 2f)
+            }
+            2 -> { // Minimal
+                Prefs.labels = false
+                S.set(S.D_STYLE, 1f)
+                S.set(S.K_SHAPE, 2f)
+                S.set(S.DT_PILL, 0f)
+                glass(S.GP_SHADOW, 0f)
+                Prefs.iconShape = 1
+            }
+            3 -> { // Neón
+                glass(S.GP_TINT, 12f)
+                glass(S.GP_RIM_COLOR, 4f)
+                glass(S.GP_RIM_W, 220f)
+                glass(S.GP_GRAD, 1f)
+                glass(S.GP_TINT2, 14f)
+                for (a in intArrayOf(S.IA_HOME, S.IA_DOCK)) S.set(S.ip(a, S.IP_HALO), 1f)
+            }
+            4 -> { // Oscuro total
+                glass(S.GP_TINT, 16f)
+                glass(S.GP_TINT_OP, 180f)
+                S.set(S.L_WALL_DIM, 45f)
+                S.set(S.L_TOP_GRAD, 1f)
+                S.set(S.L_BOT_GRAD, 1f)
+            }
+            5 -> { // Cristal claro
+                glass(S.GP_TINT, 1f)
+                glass(S.GP_TINT_OP, 45f)
+                glass(S.GP_RIM_B, 160f)
+                glass(S.GP_LENS, 170f)
+            }
+            6 -> { // Juguetón
+                for (m in intArrayOf(S.MO_PAGE, S.MO_DOCK_MAG, S.MO_RELEASE, S.MO_DRAWER_OPEN, S.MO_MENU, S.MO_EDIT_IN)) S.set(S.mp(m, S.MP_BOUNCE), 180f)
+                for (b in 0 until 5) S.set(S.BOUNCES_BASE + b, 170f)
+                Prefs.dockMode = 1
+            }
+            7 -> { // Rendimiento
+                Prefs.saver = true
+                S.set(S.P_SHADOWS, 1f)
+                S.set(S.P_BLUR_Q, 0f)
+                S.set(S.P_REDUCE, 1f)
+                Compat.applyRefreshRate(this)
+            }
+        }
+    }
+
     // ---------------------------------------------------------------- Actualizar
     /** Fila "Actualizar": busca, descarga con barra de progreso e instala directo desde el repositorio. */
     private fun updateRow(parent: LinearLayout) {
@@ -588,7 +880,7 @@ class SettingsActivity : Activity() {
     private fun card(parent: LinearLayout, padV: Int = dp(18f).toInt()): LinearLayout {
         val k = LinearLayout(this)
         k.orientation = LinearLayout.VERTICAL
-        k.background = GlassDrawable(28f)
+        k.background = GlassDrawable(28f, 1f, S.SF_SETTINGS)
         k.setPadding(dp(4f).toInt(), padV, dp(4f).toInt(), padV)
         val lp = LinearLayout.LayoutParams(-1, -2)
         lp.topMargin = dp(14f).toInt()
@@ -789,9 +1081,18 @@ class BackgroundView(ctx: Context) : View(ctx) {
     private val blob2 = Paint(Paint.ANTI_ALIAS_FLAG)
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
-        base.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), 0xFF0A1230.toInt(), 0xFF050816.toInt(), Shader.TileMode.CLAMP)
-        blob1.shader = RadialGradient(w * 0.15f, h * 0.12f, w * 0.9f, 0x663E91FF, 0x003E91FF, Shader.TileMode.CLAMP)
-        blob2.shader = RadialGradient(w * 0.95f, h * 0.75f, w * 0.85f, 0x557C5CFF, 0x007C5CFF, Shader.TileMode.CLAMP)
+        // 5 fondos: Noche azul, Morado, Negro puro, Océano, Atardecer
+        val sets = arrayOf(
+            intArrayOf(0xFF0A1230.toInt(), 0xFF050816.toInt(), 0x663E91FF, 0x557C5CFF),
+            intArrayOf(0xFF1E0B3A.toInt(), 0xFF0B0616.toInt(), 0x66B45CFF, 0x55FF4D8D),
+            intArrayOf(0xFF000000.toInt(), 0xFF000000.toInt(), 0x223E91FF, 0x22FFFFFF),
+            intArrayOf(0xFF032433.toInt(), 0xFF02101A.toInt(), 0x6622D3EE, 0x5514B8A6),
+            intArrayOf(0xFF2A0F1A.toInt(), 0xFF120610.toInt(), 0x66FB923C, 0x55F472B6)
+        )
+        val k = sets[S.i(S.L_SETTINGS_BG).coerceIn(0, 4)]
+        base.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), k[0], k[1], Shader.TileMode.CLAMP)
+        blob1.shader = RadialGradient(w * 0.15f, h * 0.12f, w * 0.9f, k[2], k[2] and 0x00FFFFFF, Shader.TileMode.CLAMP)
+        blob2.shader = RadialGradient(w * 0.95f, h * 0.75f, w * 0.85f, k[3], k[3] and 0x00FFFFFF, Shader.TileMode.CLAMP)
     }
 
     override fun onDraw(c: Canvas) {
@@ -1042,5 +1343,34 @@ class GridPreview(ctx: Context) : View(ctx) {
             c.drawPath(path, icon)
             c.restore()
         }
+    }
+}
+
+/** Círculo de color para elegir de la paleta (el primero es "Automático"). */
+class ColorDot(ctx: Context, private val color: Int, private val auto: Boolean) : View(ctx) {
+    var selected = false
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+
+    override fun onDraw(c: Canvas) {
+        val cx = width / 2f
+        val cy = height / 2f
+        val r = width.coerceAtMost(height) / 2f - dp(5f)
+        if (auto) {
+            p.shader = android.graphics.SweepGradient(cx, cy, intArrayOf(0xFF3E91FF.toInt(), 0xFFD946EF.toInt(), 0xFFFACC15.toInt(), 0xFF22C55E.toInt(), 0xFF3E91FF.toInt()), null)
+        } else {
+            p.shader = null
+            p.color = color
+        }
+        c.drawCircle(cx, cy, r, p)
+        ring.strokeWidth = dp(1f)
+        ring.color = 0x55FFFFFF
+        c.drawCircle(cx, cy, r, ring)
+        if (selected) {
+            ring.strokeWidth = dp(2.5f)
+            ring.color = Color.WHITE
+            c.drawCircle(cx, cy, r + dp(3f), ring)
+        }
+        if (auto) Glyphs.draw(c, Glyphs.CHECK, cx, cy, r * 1.1f, 0xCCFFFFFF.toInt(), if (selected) 1f else 0f)
     }
 }
