@@ -34,6 +34,7 @@ class FanView(ctx: Context) : AppsView(ctx) {
     private var moved = false
     private var downIdx = -1
     private var longFired = false
+    private var wasMoving = false
     private var vt: VelocityTracker? = null
     private val rectTmp = RectF()
     private val longRun = Runnable {
@@ -165,6 +166,7 @@ class FanView(ctx: Context) : AppsView(ctx) {
                 vt?.recycle()
                 vt = VelocityTracker.obtain()
                 vt?.addMovement(ev)
+                wasMoving = scroll.isMoving
                 scroll.stop()
                 downX = x
                 downY = y
@@ -201,6 +203,10 @@ class FanView(ctx: Context) : AppsView(ctx) {
                 if (moved) {
                     vt?.computeCurrentVelocity(1000)
                     scroll.release(vt?.yVelocity ?: 0f)
+                    ticker.kick()
+                } else if (wasMoving) {
+                    // el toque solo frenó la inercia o el rebote: no abre nada y vuelve al borde
+                    scroll.clampNow()
                     ticker.kick()
                 } else if (!longFired && up) {
                     if (downIdx >= 0) {

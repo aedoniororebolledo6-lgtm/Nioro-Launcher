@@ -57,7 +57,7 @@ abstract class AppsView(ctx: Context) : View(ctx) {
     }
 
     protected fun unpress() {
-        if (pressKey == null) return
+        if (pressKey == null && pressSp.target >= 1f) return
         pressSp.tune(420f, 0.5f)
         pressSp.to(1f)
         ticker.kick()

@@ -36,6 +36,7 @@ class MainActivity : Activity() {
     private var resumed = false
     private var wasStopped = false
     private val overlayGuard = Runnable { if (overlay.active) overlay.hide() }
+    private val calmDown = Runnable { Compat.applyRefreshRate(this, false) }
 
     private val pkgReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
@@ -49,6 +50,7 @@ class MainActivity : Activity() {
         Prefs.init(this)
         Compat.edgeToEdge(this)
         Compat.applyRefreshRate(this)
+        }
 
         root = FrameLayout(this)
         home = HomeView(this)
@@ -65,6 +67,15 @@ class MainActivity : Activity() {
         root.addView(overlay, FrameLayout.LayoutParams(mp, mp))
         root.addView(menu, FrameLayout.LayoutParams(mp, mp))
         setContentView(root)
+        Screen.onAnimating = { on ->
+            if (on) {
+                root.removeCallbacks(calmDown)
+                Compat.applyRefreshRate(this, true)
+            } else {
+                // se espera un poco: así gestos seguidos no cambian de frecuencia una y otra vez
+                root.removeCallbacks(calmDown)
+                root.postDelayed(calmDown, 1200)
+            }
 
         root.setOnApplyWindowInsetsListener { _, ins ->
             val (top, bottom) = Compat.bars(ins)
@@ -200,7 +211,7 @@ class MainActivity : Activity() {
         home.setDrawerProgress(p)
         val blurOn = Prefs.blur && !Prefs.saver
         if (p > 0.001f) {
-            if (blurOn && !backdrop.hasSnapshot) backdrop.capture(home)
+            if (blurOn && !backdrop.tried) backdrop.capture(home)
             backdrop.progress = p
             home.alpha = if (backdrop.hasSnapshot) 1f - p else 1f - 0.35f * p
         } else {

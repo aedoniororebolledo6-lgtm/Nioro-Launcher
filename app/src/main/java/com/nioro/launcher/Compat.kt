@@ -10,10 +10,12 @@ import kotlin.math.abs
 object Compat {
 
     /**
-     * Pide a la pantalla su modo de mayor frecuencia (p. ej. 120 Hz en el S21) mientras
-     * el launcher está visible. En modo ahorro pide 60 Hz, que sí ahorra batería de verdad.
+     * Frecuencia de pantalla inteligente:
+     *  - mientras hay una animación se pide el modo más rápido (120 Hz en el S21) para que sea fluida;
+     *  - en reposo se deja al sistema elegir (One UI baja a 10-60 Hz y ahorra batería);
+     *  - en modo ahorro se pide 60 Hz siempre.
      */
-    fun applyRefreshRate(act: Activity) {
+    fun applyRefreshRate(act: Activity, animating: Boolean = false) {
         try {
             @Suppress("DEPRECATION")
             val disp = if (Build.VERSION.SDK_INT >= 30) act.display else act.windowManager.defaultDisplay
@@ -22,18 +24,18 @@ object Compat {
             val same = disp.supportedModes.filter {
                 it.physicalWidth == cur.physicalWidth && it.physicalHeight == cur.physicalHeight
             }
-            if (same.isEmpty()) return
-            val want = if (Prefs.saver) {
-                same.minByOrNull { abs(it.refreshRate - 60f) } ?: cur
-            } else {
-                same.maxByOrNull { it.refreshRate } ?: cur
+            val wantId = when {
+                same.size < 2 -> 0
+                Prefs.saver -> (same.minByOrNull { abs(it.refreshRate - 60f) } ?: cur).modeId
+                animating -> (same.maxByOrNull { it.refreshRate } ?: cur).modeId
+                else -> 0
             }
             val lp = act.window.attributes
-            if (lp.preferredDisplayModeId != want.modeId) {
-                lp.preferredDisplayModeId = want.modeId
+            if (lp.preferredDisplayModeId != wantId) {
+                lp.preferredDisplayModeId = wantId
                 act.window.attributes = lp
             }
-            Screen.hz = want.refreshRate.coerceIn(30f, 165f)
+            Screen.hz = disp.refreshRate.coerceIn(30f, 165f)
         } catch (t: Throwable) {
         }
     }

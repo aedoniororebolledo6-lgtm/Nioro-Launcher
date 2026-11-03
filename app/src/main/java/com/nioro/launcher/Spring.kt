@@ -114,11 +114,13 @@ class Ticker(private val frame: (Float) -> Boolean) : Choreographer.FrameCallbac
         if (!running) {
             running = true
             last = 0L
+            Screen.animStart()
             Choreographer.getInstance().postFrameCallback(this)
         }
     }
 
     fun stop() {
+        if (running) Screen.animEnd()
         running = false
         Choreographer.getInstance().removeFrameCallback(this)
     }
@@ -138,6 +140,7 @@ class Ticker(private val frame: (Float) -> Boolean) : Choreographer.FrameCallbac
             Choreographer.getInstance().postFrameCallback(this)
         } else {
             running = false
+            Screen.animEnd()
         }
     }
 }
@@ -146,6 +149,20 @@ class Ticker(private val frame: (Float) -> Boolean) : Choreographer.FrameCallbac
 object Screen {
     @Volatile var hz = 60f
     val frameSec: Float get() = 1f / hz
+
+    /** Se avisa cuando empieza la primera animación (true) o termina la última (false). */
+    var onAnimating: ((Boolean) -> Unit)? = null
+    private var count = 0
+
+    fun animStart() {
+        count++
+        if (count == 1) onAnimating?.invoke(true)
+    }
+
+    fun animEnd() {
+        if (count > 0) count--
+        if (count == 0) onAnimating?.invoke(false)
+    }
 }
 
 /** Estiramiento elástico estilo iOS cuando se arrastra más allá del borde. */
@@ -186,8 +203,23 @@ class Scroll1D(ticker: Ticker) : Stepper {
     fun stop() {
         flinging = false
         flingV = 0f
-        sp.snap(sp.value)
-        raw = sp.value
+        val v = sp.value
+        sp.snap(v)
+        raw = when {
+            v < min -> min - unrubber(min - v)
+            v > max -> max + unrubber(v - max)
+            else -> v
+        }
+    }
+
+    /** ¿Se estaba moviendo (inercia, rebote o estirado fuera del borde)? */
+    val isMoving: Boolean get() = flinging || sp.active || sp.value < min - 0.5f || sp.value > max + 0.5f
+
+    /** Inversa de rubber(): cuánto "arrastre real" corresponde a un estiramiento visible f. */
+    private fun unrubber(f: Float): Float {
+        val d = if (dim <= 0f) 900f else dim
+        val q = (f / d).coerceAtMost(0.95f)
+        return q / (1f - q) * d / 0.55f
     }
 
     fun drag(delta: Float) {

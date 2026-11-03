@@ -58,6 +58,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
     private var startPos = 0f
     private var mode = 0 // 0 nada, 1 desplazar, 2 descartar
     private var hitIdx = -1
+    private var wasMoving = false
     private var vt: VelocityTracker? = null
     private val slop = android.view.ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
 
@@ -297,6 +298,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
                 mode = 0
                 startPos = pos.value
                 pos.snap(pos.value)
+                wasMoving = (style == 3 && gridScroll.isMoving) || pos.active
                 gridScroll.stop()
                 hitIdx = hit(x, y)
                 return true
@@ -361,7 +363,11 @@ class RecentsView(ctx: Context) : View0(ctx) {
                             ticker.kick()
                         }
                     }
-                    else -> if (up) {
+                    else -> if (wasMoving) {
+                        gridScroll.clampNow()
+                        if (pos.value != pos.value.roundToInt().toFloat()) pos.to(pos.value.roundToInt().toFloat().coerceIn(0f, maxPos()))
+                        ticker.kick()
+                    } else if (up) {
                         if (btn.contains(x, y)) {
                             listener?.onOpenAll()
                         } else if (hitIdx >= 0 && hitIdx < items.size) {

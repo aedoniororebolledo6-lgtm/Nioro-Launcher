@@ -151,10 +151,29 @@ object Blur {
         val h = src.height
         val px = IntArray(w * h)
         src.getPixels(px, 0, w, 0, 0, w, h)
+        // premultiplicar: así lo transparente no "ensucia" de negro los colores al promediar
+        for (i in px.indices) {
+            val p = px[i]
+            val a = p ushr 24
+            if (a == 255) continue
+            px[i] = (a shl 24) or ((((p shr 16) and 255) * a / 255) shl 16) or ((((p shr 8) and 255) * a / 255) shl 8) or ((p and 255) * a / 255)
+        }
         val tmp = IntArray(w * h)
         repeat(3) {
             pass(px, tmp, w, h, radius, true)
             pass(tmp, px, w, h, radius, false)
+        }
+        for (i in px.indices) {
+            val p = px[i]
+            val a = p ushr 24
+            if (a == 255 || a == 0) {
+                if (a == 0) px[i] = 0
+                continue
+            }
+            val r = (((p shr 16) and 255) * 255 / a).coerceAtMost(255)
+            val g = (((p shr 8) and 255) * 255 / a).coerceAtMost(255)
+            val b = ((p and 255) * 255 / a).coerceAtMost(255)
+            px[i] = (a shl 24) or (r shl 16) or (g shl 8) or b
         }
         val out = if (src.isMutable) src else src.copy(Bitmap.Config.ARGB_8888, true)
         out.setPixels(px, 0, w, 0, 0, w, h)

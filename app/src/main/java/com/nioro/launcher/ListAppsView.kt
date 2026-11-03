@@ -40,6 +40,7 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
     private var moved = false
     private var downRow = -1
     private var longFired = false
+    private var wasMoving = false
     private var onIndex = false
     private var bubbleChar = ' '
     private var vt: VelocityTracker? = null
@@ -214,6 +215,7 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
                 vt?.recycle()
                 vt = VelocityTracker.obtain()
                 vt?.addMovement(ev)
+                wasMoving = scroll.isMoving
                 scroll.stop()
                 downX = x
                 downY = y
@@ -263,6 +265,10 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
                 } else if (moved) {
                     vt?.computeCurrentVelocity(1000)
                     scroll.release(-(vt?.yVelocity ?: 0f))
+                    ticker.kick()
+                } else if (wasMoving) {
+                    // el toque solo frenó la inercia o el rebote: no abre nada y vuelve al borde
+                    scroll.clampNow()
                     ticker.kick()
                 } else if (!longFired && up) {
                     val row = downRow

@@ -409,7 +409,7 @@ class HomeView(ctx: Context) : View(ctx) {
     }
 
     private fun unpress() {
-        if (pressKey == null && pressSlot == null) return
+        if (pressKey == null && pressSlot == null && pressSp.target >= 1f) return
         pressSp.tune(420f, 0.5f)
         pressSp.to(1f)
         ticker.kick()

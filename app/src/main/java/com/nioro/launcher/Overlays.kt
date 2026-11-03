@@ -278,8 +278,12 @@ class BackdropView(ctx: Context) : View(ctx) {
     }
 
     val hasSnapshot: Boolean get() = bmp != null
+    var tried = false
+        private set
 
     fun capture(src: View) {
+        if (tried) return
+        tried = true
         val w = src.width
         val h = src.height
         if (w <= 0 || h <= 0) return
@@ -292,8 +296,9 @@ class BackdropView(ctx: Context) : View(ctx) {
             src.alpha = 1f
             src.draw(c)
             src.alpha = a
-            bmp?.recycle()
+            val old = bmp
             bmp = Blur.boxBlur(b, 4)
+            old?.recycle()
             visibility = VISIBLE
             invalidate()
         } catch (t: Throwable) {
@@ -302,6 +307,7 @@ class BackdropView(ctx: Context) : View(ctx) {
     }
 
     fun release() {
+        tried = false
         visibility = INVISIBLE
         bmp?.recycle()
         bmp = null
