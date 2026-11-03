@@ -251,8 +251,8 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
                 moved = false
                 longFired = false
                 downBall = hit(x, y)
-                handler.removeCallbacks(longRun)
-                if (downBall != null) handler.postDelayed(longRun, 420L)
+                uiHandler.removeCallbacks(longRun)
+                if (downBall != null) uiHandler.postDelayed(longRun, 420L)
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
@@ -261,14 +261,14 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
                 dragY = y
                 if (!moved && (abs(x - downX) > slop || abs(y - downY) > slop)) {
                     moved = true
-                    handler.removeCallbacks(longRun)
+                    uiHandler.removeCallbacks(longRun)
                     dragBall = downBall
                     if (dragBall != null) ticker.kick()
                 }
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                handler.removeCallbacks(longRun)
+                uiHandler.removeCallbacks(longRun)
                 val up = ev.actionMasked == MotionEvent.ACTION_UP
                 val d = dragBall
                 dragBall = null

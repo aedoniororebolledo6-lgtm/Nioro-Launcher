@@ -160,8 +160,8 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
                 pageStart = pageSp.value
                 pageSp.snap(pageSp.value)
                 downIdx = idxAt(x, y)
-                handler.removeCallbacks(longRun)
-                if (downIdx >= 0) handler.postDelayed(longRun, 380L)
+                uiHandler.removeCallbacks(longRun)
+                if (downIdx >= 0) uiHandler.postDelayed(longRun, 380L)
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
@@ -171,7 +171,7 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
                 if (longFired) return true
                 if (mode == 0 && (abs(dx) > slop || abs(dy) > slop)) {
                     moved = true
-                    handler.removeCallbacks(longRun)
+                    uiHandler.removeCallbacks(longRun)
                     mode = if (abs(dx) > abs(dy)) 1 else 2
                 }
                 if (mode == 1) {
@@ -188,7 +188,7 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                handler.removeCallbacks(longRun)
+                uiHandler.removeCallbacks(longRun)
                 val up = ev.actionMasked == MotionEvent.ACTION_UP
                 vt?.addMovement(ev)
                 if (mode == 1) {

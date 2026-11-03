@@ -35,9 +35,9 @@ abstract class AppsView(ctx: Context) : View(ctx) {
 
     protected var apps: List<AppEntry> = emptyList()
     protected var shown: List<AppEntry> = emptyList()
-    protected var query = ""
+    protected var queryText = ""
     protected val ticker = Ticker { dt -> onFrame(dt) }
-    protected val handler = Handler(Looper.getMainLooper())
+    protected val uiHandler = Handler(Looper.getMainLooper())
     protected val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
     protected val glass = Glass()
     protected val bmpPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -59,12 +59,12 @@ abstract class AppsView(ctx: Context) : View(ctx) {
     }
 
     fun setQuery(q: String) {
-        query = q.trim().lowercase(Locale.getDefault())
+        queryText = q.trim().lowercase(Locale.getDefault())
         refilter()
     }
 
     private fun refilter() {
-        shown = if (query.isEmpty()) apps else apps.filter { it.label.lowercase().contains(query) }
+        shown = if (queryText.isEmpty()) apps else apps.filter { it.label.lowercase().contains(queryText) }
         labelCache.clear()
         onDataChanged()
         invalidate()
@@ -78,7 +78,7 @@ abstract class AppsView(ctx: Context) : View(ctx) {
     open fun onClosed() {}
 
     override fun onDetachedFromWindow() {
-        handler.removeCallbacksAndMessages(null)
+        uiHandler.removeCallbacksAndMessages(null)
         ticker.stop()
         super.onDetachedFromWindow()
     }

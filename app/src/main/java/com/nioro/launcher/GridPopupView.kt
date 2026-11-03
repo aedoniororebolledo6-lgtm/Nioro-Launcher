@@ -171,8 +171,8 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
                 moved = false
                 longFired = false
                 downIdx = idxAt(x, y)
-                handler.removeCallbacks(longRun)
-                if (downIdx >= 0) handler.postDelayed(longRun, 380L)
+                uiHandler.removeCallbacks(longRun)
+                if (downIdx >= 0) uiHandler.postDelayed(longRun, 380L)
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
@@ -180,7 +180,7 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
                 if (longFired) return true
                 if (!moved && (abs(x - downX) > slop || abs(y - downY) > slop)) {
                     moved = true
-                    handler.removeCallbacks(longRun)
+                    uiHandler.removeCallbacks(longRun)
                 }
                 if (moved) {
                     scroll.drag(-(y - lastY))
@@ -190,7 +190,7 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                handler.removeCallbacks(longRun)
+                uiHandler.removeCallbacks(longRun)
                 val up = ev.actionMasked == MotionEvent.ACTION_UP
                 vt?.addMovement(ev)
                 if (moved) {

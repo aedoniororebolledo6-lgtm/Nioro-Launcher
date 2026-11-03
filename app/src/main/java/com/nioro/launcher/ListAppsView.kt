@@ -224,8 +224,8 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
                     return true
                 }
                 downRow = rowAt(x, y)
-                handler.removeCallbacks(longRun)
-                if (downRow >= 0) handler.postDelayed(longRun, 380L)
+                uiHandler.removeCallbacks(longRun)
+                if (downRow >= 0) uiHandler.postDelayed(longRun, 380L)
                 invalidate()
                 return true
             }
@@ -238,7 +238,7 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
                 if (longFired) return true
                 if (!moved && (abs(x - downX) > slop || abs(y - downY) > slop)) {
                     moved = true
-                    handler.removeCallbacks(longRun)
+                    uiHandler.removeCallbacks(longRun)
                 }
                 if (moved) {
                     scroll.drag(-(y - lastY))
@@ -248,7 +248,7 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                handler.removeCallbacks(longRun)
+                uiHandler.removeCallbacks(longRun)
                 val up = ev.actionMasked == MotionEvent.ACTION_UP
                 vt?.addMovement(ev)
                 if (onIndex) {
