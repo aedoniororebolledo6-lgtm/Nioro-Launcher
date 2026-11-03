@@ -64,10 +64,11 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
         val w = width.toFloat()
         val h = height.toFloat()
         if (w <= 0f) return
-        cols = Prefs.columns
+        cols = Prefs.drawerCols.coerceIn(3, 6)
         iconSize = dp(Prefs.iconDp.toFloat() - 2f)
         val pw = w - dp(32f)
         cellW = (pw - dp(20f)) / cols
+        iconSize = min(iconSize, cellW - dp(14f)).coerceAtLeast(dp(30f))
         cellH = iconSize + dp(40f)
         val bottom = h - insetBottom - dp(96f) - dp(14f)
         val maxH = min(h * 0.66f, h - insetTop - dp(160f))

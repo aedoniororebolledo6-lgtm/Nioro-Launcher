@@ -60,6 +60,16 @@ class SettingsActivity : Activity() {
             "Los iconos caen como esferas con física real"
         )
         val CLOCK = arrayOf("Nioro", "One UI apilado", "Sin reloj")
+        val SHAPES = arrayOf("Squircle", "Círculo", "One UI", "Gota", "Cristal")
+        val SHAPE_DESC = arrayOf(
+            "Curva continua como los iconos del iPhone",
+            "Iconos redondos",
+            "Cuadrado de esquinas suaves como Samsung",
+            "Redondos con una esquina en punta",
+            "El dibujo flota sobre cristal teñido con borde brillante"
+        )
+        val COLS = arrayOf("3", "4", "5", "6")
+        val ROWS = arrayOf("Auto", "4", "5", "6", "7")
 
         const val PAGE_HOME = 0
         const val PAGE_DOCK = 1
@@ -76,7 +86,7 @@ class SettingsActivity : Activity() {
             "Apps en segundo plano", "Apariencia", "Batería y rendimiento", "Acerca de"
         )
         val CAT_SUBS = arrayOf(
-            "Reloj, cuadrícula, iconos y nombres",
+            "Cuadrícula, forma de iconos, reloj y nombres",
             "Magnificación, rebote y tamaño",
             "5 formas de ver todas tus apps",
             "Abrir, volver y cambiar de página",
@@ -317,14 +327,57 @@ class SettingsActivity : Activity() {
     private fun buildCategory(i: Int): View = page(CAT_TITLES[i], null, false) { c ->
         when (i) {
             PAGE_HOME -> {
+                // vista previa en vivo de la pantalla de inicio
+                val pk = card(c, dp(12f).toInt())
+                val gp = GridPreview(this)
+                pk.addView(gp, LinearLayout.LayoutParams(-1, dp(300f).toInt()))
+
+                val k0 = card(c)
+                choice(k0, "Forma de los iconos", SHAPES, Prefs.iconShape, -1, SHAPE_DESC) {
+                    Prefs.iconShape = it
+                    gp.busy = true
+                    gp.invalidate()
+                    AppRepo.load(this) {
+                        gp.busy = false
+                        gp.invalidate()
+                    }
+                }
+
                 val k = card(c)
-                choice(k, "Reloj", CLOCK, Prefs.clockStyle, -1, null) { Prefs.clockStyle = it }
+                choice(k, "Columnas", COLS, (Prefs.columns - 3).coerceIn(0, 3), -1, null) {
+                    Prefs.columns = it + 3
+                    gp.invalidate()
+                }
                 divider(k, 0f)
-                slider(k, "Columnas", 4, 5, Prefs.columns, "") { Prefs.columns = it }
+                choice(k, "Filas", ROWS, if (Prefs.rows <= 0) 0 else (Prefs.rows - 3).coerceIn(1, 4), -1, null) {
+                    Prefs.rows = if (it == 0) 0 else it + 3
+                    gp.invalidate()
+                }
                 divider(k, 0f)
-                slider(k, "Tamaño de iconos", 46, 70, Prefs.iconDp, " dp") { Prefs.iconDp = it }
+                slider(k, "Tamaño de iconos", 40, 72, Prefs.iconDp, " dp") {
+                    Prefs.iconDp = it
+                    gp.invalidate()
+                }
                 divider(k, 0f)
-                toggle(k, "Mostrar nombres", "Texto bajo cada icono", Prefs.labels) { Prefs.labels = it }
+                slider(k, "Tamaño del texto", 9, 16, Prefs.labelSize, " sp") {
+                    Prefs.labelSize = it
+                    gp.invalidate()
+                }
+                divider(k, 0f)
+                toggle(k, "Mostrar nombres", "Texto bajo cada icono", Prefs.labels) {
+                    Prefs.labels = it
+                    gp.invalidate()
+                }
+
+                val kc = card(c)
+                choice(kc, "Reloj", CLOCK, Prefs.clockStyle, -1, null) {
+                    Prefs.clockStyle = it
+                    gp.invalidate()
+                }
+                divider(kc, 0f)
+                choice(kc, "Columnas en la vista de apps", COLS, (Prefs.drawerCols - 3).coerceIn(0, 3), -1, null) {
+                    Prefs.drawerCols = it + 3
+                }
                 val k2 = card(c, dp(6f).toInt())
                 button(k2, "Fondo de pantalla", null, Glyphs.WALLPAPER) {
                     tryStart(Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Fondo de pantalla"))
@@ -867,5 +920,125 @@ class ProgressLine(ctx: Context) : View(ctx) {
         c.drawRoundRect(r, h / 2f, h / 2f, track)
         fill.color = OneColors.ACCENT
         c.drawRoundRect(r.left, r.top, r.left + r.width() * p, r.bottom, h / 2f, h / 2f, fill)
+    }
+}
+
+/**
+ * Vista previa de la pantalla de inicio que cambia al instante con la cuadrícula,
+ * el tamaño y la forma de los iconos (usa tus iconos reales).
+ */
+class GridPreview(ctx: Context) : View(ctx) {
+    var busy = false
+    private val glass = Glass()
+    private val bg = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val icon = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val label = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val clock = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val hint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val r = RectF()
+    private val d = RectF()
+    private val colors = intArrayOf(
+        0xFF5AC8FA.toInt(), 0xFFFF9F0A.toInt(), 0xFF34C759.toInt(), 0xFFFF375F.toInt(),
+        0xFFBF5AF2.toInt(), 0xFFFFD60A.toInt(), 0xFF64D2FF.toInt(), 0xFFFF6482.toInt()
+    )
+
+    init {
+        clock.color = Color.WHITE
+        clock.textAlign = Paint.Align.CENTER
+        clock.typeface = Typeface.create(Typeface.DEFAULT, 200, false)
+        label.color = 0x8CFFFFFF.toInt()
+        hint.color = Color.WHITE
+        hint.textAlign = Paint.Align.CENTER
+        hint.textSize = dp(13f)
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
+        bg.shader = LinearGradient(0f, 0f, w.toFloat(), h.toFloat(), intArrayOf(0xFF2B4FC4.toInt(), 0xFF5B2FA8.toInt(), 0xFF101A44.toInt()), null, Shader.TileMode.CLAMP)
+    }
+
+    override fun onDraw(c: Canvas) {
+        val scr = resources.displayMetrics
+        // "móvil" con la proporción real de tu pantalla
+        val ph = height - dp(8f)
+        val pw = min(width - dp(16f), ph * scr.widthPixels / scr.heightPixels.toFloat())
+        r.set(width / 2f - pw / 2f, dp(4f), width / 2f + pw / 2f, dp(4f) + ph)
+        c.drawRoundRect(r, dp(22f), dp(22f), bg)
+        val k = pw / scr.widthPixels.toFloat() // escala pantalla real -> vista previa
+        val cols = Prefs.columns.coerceIn(3, 6)
+        // reloj
+        val top = when (Prefs.clockStyle) {
+            1 -> {
+                clock.textAlign = Paint.Align.LEFT
+                clock.textSize = dp(96f) * k
+                c.drawText("12", r.left + dp(26f) * k, r.top + dp(130f) * k, clock)
+                c.drawText("30", r.left + dp(26f) * k, r.top + dp(214f) * k, clock)
+                r.top + dp(262f) * k
+            }
+            2 -> r.top + dp(60f) * k
+            else -> {
+                clock.textAlign = Paint.Align.CENTER
+                clock.textSize = dp(76f) * k
+                c.drawText("12:30", r.centerX(), r.top + dp(118f) * k, clock)
+                r.top + dp(176f) * k
+            }
+        }
+        val dockH = (dp(Prefs.dockDp.toFloat()) + dp(22f)) * k
+        val dockBottom = r.bottom - dp(40f) * k
+        val dotsY = dockBottom - dockH - dp(22f) * k
+        val avail = dotsY - dp(16f) * k - top
+        val labelH = if (Prefs.labels) dp(Prefs.labelSize + 8f) * k else 0f
+        var iconS = dp(Prefs.iconDp.toFloat()) * k
+        val minCell = iconS + labelH + dp(24f) * k
+        val rows = if (Prefs.rows > 0) Prefs.rows.coerceIn(3, 8) else (avail / minCell).toInt().coerceIn(2, 7)
+        val cw = pw / cols
+        val ch = avail / rows
+        iconS = min(iconS, min(cw - dp(12f) * k, ch - labelH - dp(8f) * k)).coerceAtLeast(dp(28f) * k)
+        val apps = AppRepo.apps
+        val keys = Prefs.homeKeys()
+        var n = 0
+        for (row in 0 until rows) for (col in 0 until cols) {
+            val cx = r.left + cw * (col + 0.5f)
+            val cy = top + ch * (row + 0.5f) - labelH / 2f
+            val e = if (n < keys.size) AppRepo.get(keys[n]) else if (apps.isNotEmpty()) apps[(n * 5) % apps.size] else null
+            drawIcon(c, e, n, cx, cy, iconS)
+            if (Prefs.labels) {
+                label.alpha = 140
+                val lw = min(cw * 0.7f, iconS * 1.1f)
+                val lh = max(dp(2f), dp(Prefs.labelSize.toFloat()) * k * 0.45f)
+                d.set(cx - lw / 2f, cy + iconS / 2f + dp(6f) * k, cx + lw / 2f, cy + iconS / 2f + dp(6f) * k + lh)
+                c.drawRoundRect(d, lh / 2f, lh / 2f, label)
+            }
+            n++
+        }
+        // dock
+        val ds = dp(Prefs.dockDp.toFloat()) * k
+        val dw = ds * 6.4f
+        d.set(r.centerX() - dw / 2f, dockBottom - dockH, r.centerX() + dw / 2f, dockBottom)
+        glass.draw(c, d, dockH * 0.44f, 1f)
+        val dk = Prefs.dockKeys()
+        for (i in 0 until 5) {
+            val e = if (i < dk.size) AppRepo.get(dk[i]) else null
+            drawIcon(c, e, i + 3, d.left + dw * (i + 0.7f) / 5.4f + ds * 0.35f, d.centerY(), ds)
+        }
+        if (busy) {
+            d.set(r.centerX() - dp(90f), r.centerY() - dp(20f), r.centerX() + dp(90f), r.centerY() + dp(20f))
+            glass.draw(c, d, dp(20f), 1f)
+            c.drawText("Aplicando forma…", d.centerX(), d.centerY() + dp(5f), hint)
+        }
+    }
+
+    private fun drawIcon(c: Canvas, e: AppEntry?, i: Int, cx: Float, cy: Float, s: Float) {
+        val b = e?.icon
+        d.set(cx - s / 2f, cy - s / 2f, cx + s / 2f, cy + s / 2f)
+        if (b != null) {
+            c.drawBitmap(b, null, d, icon)
+        } else {
+            icon.color = colors[i % colors.size]
+            val path = AppRepo.shapePath(Prefs.iconShape, s)
+            c.save()
+            c.translate(d.left, d.top)
+            c.drawPath(path, icon)
+            c.restore()
+        }
     }
 }

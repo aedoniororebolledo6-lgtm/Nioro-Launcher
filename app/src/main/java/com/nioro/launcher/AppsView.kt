@@ -72,6 +72,7 @@ abstract class AppsView(ctx: Context) : View(ctx) {
     }
 
     open fun setData(list: List<AppEntry>) {
+        textPaint.textSize = dp(Prefs.labelSize.toFloat())
         apps = list
         refilter()
     }

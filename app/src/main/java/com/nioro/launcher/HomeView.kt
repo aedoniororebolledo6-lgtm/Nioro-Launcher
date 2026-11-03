@@ -316,7 +316,8 @@ class HomeView(ctx: Context) : View(ctx) {
         val h = height.toFloat()
         if (w <= 0f || h <= 0f) return
         iconPx = dp(Prefs.iconDp.toFloat())
-        cols = Prefs.columns
+        cols = Prefs.columns.coerceIn(3, 6)
+        textPaint.textSize = dp(Prefs.labelSize.toFloat())
         val dockBottom = h - insetBottom - dp(12f)
         dockH = dp(Prefs.dockDp.toFloat()) + dp(22f)
         dockCy = dockBottom - dockH / 2f
@@ -327,12 +328,15 @@ class HomeView(ctx: Context) : View(ctx) {
             else -> dp(146f)
         }
         val avail = dotsY - dp(16f) - gridTop
-        val labelH = if (Prefs.labels) dp(20f) else 0f
+        val labelH = if (Prefs.labels) dp(Prefs.labelSize + 8f) else 0f
         val minCell = iconPx + labelH + dp(24f)
-        rows = (avail / minCell).toInt().coerceIn(2, 7)
+        // filas: automáticas según el espacio, o las que elija el usuario
+        rows = if (Prefs.rows > 0) Prefs.rows.coerceIn(3, 8) else (avail / minCell).toInt().coerceIn(2, 7)
         cap = cols * rows
         cellW = w / cols
         cellH = avail / rows
+        // el icono nunca se sale de su celda aunque la cuadrícula sea muy densa
+        iconPx = min(iconPx, min(cellW - dp(12f), cellH - labelH - dp(8f))).coerceAtLeast(dp(28f))
         labelCache.clear()
         rebuildDock()
     }
@@ -663,7 +667,7 @@ class HomeView(ctx: Context) : View(ctx) {
         c.drawBitmap(b, null, dst, bmpPaint)
         if (label && Prefs.labels) {
             textPaint.alpha = al
-            c.drawText(labelOf(e), cx, cy + size / 2f + dp(16f), textPaint)
+            c.drawText(labelOf(e), cx, cy + size / 2f + dp(Prefs.labelSize + 4f), textPaint)
         }
     }
 

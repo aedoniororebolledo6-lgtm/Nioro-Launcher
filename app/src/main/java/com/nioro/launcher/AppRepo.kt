@@ -87,6 +87,14 @@ object AppRepo {
         val app = ctx.applicationContext
         exec.execute {
             try {
+                // si cambió la forma de los iconos, se vuelven a hornear todos
+                val shape = Prefs.iconShape
+                val shapeChanged = shape != bakedShape
+                if (shapeChanged) {
+                    cache.clear()
+                    tintCache.clear()
+                    bakedShape = shape
+                }
                 val pm = app.packageManager
                 val q = Intent(Intent.ACTION_MAIN)
                 q.addCategory(Intent.CATEGORY_LAUNCHER)
@@ -104,9 +112,10 @@ object AppRepo {
                     } else {
                         val d = try { ri.loadIcon(pm) } catch (t: Throwable) { null }
                         if (d != null) {
-                            val b = bake(renderContent(d, px()))
+                            val full = renderContent(d, px())
+                            e.tint = average(full)
+                            val b = if (shape == 4) bakeGlass(d, full, e.tint) else bake(full, shape)
                             e.icon = b
-                            e.tint = average(b)
                             cache[key] = b
                             tintCache[key] = e.tint
                         }
@@ -114,7 +123,7 @@ object AppRepo {
                     out.add(e)
                 }
                 out.sortBy { it.label.lowercase() }
-                if (launchpadIcon == null) buildSpecials()
+                if (launchpadIcon == null || shapeChanged) buildSpecials()
                 val map = HashMap<String, AppEntry>()
                 for (e in out) map[e.key] = e
                 main.post {
@@ -128,7 +137,26 @@ object AppRepo {
         }
     }
 
+    @Volatile var bakedShape = -1
+        private set
+
     // ---------------- Iconos ----------------
+    /** 0 Squircle (Apple) · 1 Círculo · 2 One UI (cuadrado redondeado) · 3 Gota · 4 Cristal (squircle). */
+    fun shapePath(shape: Int, size: Float): Path {
+        return when (shape) {
+            1 -> Path().apply { addCircle(size / 2f, size / 2f, size / 2f, Path.Direction.CW) }
+            2 -> Path().apply { addRoundRect(RectF(0f, 0f, size, size), size * 0.3f, size * 0.3f, Path.Direction.CW) }
+            3 -> {
+                val r = size * 0.5f
+                val k = size * 0.14f
+                Path().apply {
+                    addRoundRect(RectF(0f, 0f, size, size), floatArrayOf(r, r, r, r, k, k, r, r), Path.Direction.CW)
+                }
+            }
+            else -> squirclePath(size)
+        }
+    }
+
     fun squirclePath(size: Float): Path {
         val p = Path()
         val r = size / 2.0
@@ -170,12 +198,59 @@ object AppRepo {
         return b
     }
 
-    /** Aplica la máscara squircle y hornea el borde y el brillo superior "liquid glass". */
-    private fun bake(content: Bitmap): Bitmap {
+    /**
+     * Estilo 5 "Cristal": el dibujo del icono flota sobre una baldosa de cristal teñida con su color,
+     * con borde grueso brillante (como los iconos transparentes de iOS 26 / Liquid Glass).
+     */
+    private fun bakeGlass(d: Drawable, full: Bitmap, tint: Int): Bitmap {
+        val size = full.width
+        val s = size.toFloat()
+        val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val c = Canvas(out)
+        val path = squirclePath(s)
+        val bg = Paint(Paint.ANTI_ALIAS_FLAG)
+        bg.color = blend(tint, 0xFF0B1430.toInt(), 0.55f)
+        bg.alpha = 205
+        c.drawPath(path, bg)
+        val lens = Paint(Paint.ANTI_ALIAS_FLAG)
+        lens.shader = LinearGradient(0f, 0f, 0f, s, intArrayOf(0x59FFFFFF, 0x0DFFFFFF, 0x26FFFFFF), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
+        c.drawPath(path, lens)
+        // primer plano del icono
+        val fg = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val cf = Canvas(fg)
+        if (d is AdaptiveIconDrawable && d.foreground != null) {
+            val ext = (size * 0.25f).toInt()
+            d.foreground.setBounds(-ext, -ext, size + ext, size + ext)
+            d.foreground.draw(cf)
+        } else {
+            val inset = (size * 0.2f).toInt()
+            d.setBounds(inset, inset, size - inset, size - inset)
+            d.draw(cf)
+        }
+        val fp = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        val sc = 0.94f
+        val off = s * (1f - sc) / 2f
+        c.drawBitmap(fg, null, RectF(off, off, s - off, s - off), fp)
+        fg.recycle()
+        full.recycle()
+        val rim = Paint(Paint.ANTI_ALIAS_FLAG)
+        rim.style = Paint.Style.STROKE
+        rim.strokeWidth = s * 0.04f
+        rim.shader = LinearGradient(0f, 0f, s, s, intArrayOf(0xF2FFFFFF.toInt(), 0x33FFFFFF, 0x1AFFFFFF, 0x99FFFFFF.toInt()), floatArrayOf(0f, 0.35f, 0.65f, 1f), Shader.TileMode.CLAMP)
+        // borde dibujado sobre una forma un poco más pequeña: queda dentro del icono y con bordes suaves
+        val sw = rim.strokeWidth
+        val inner = squirclePath(s - sw)
+        inner.offset(sw / 2f, sw / 2f)
+        c.drawPath(inner, rim)
+        return out
+    }
+
+    /** Aplica la máscara con la forma elegida y hornea el borde y el brillo superior "liquid glass". */
+    private fun bake(content: Bitmap, shape: Int = Prefs.iconShape): Bitmap {
         val size = content.width
         val out = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         val c = Canvas(out)
-        val path = squirclePath(size.toFloat())
+        val path = shapePath(if (shape == 4) 0 else shape, size.toFloat())
         val mask = Paint(Paint.ANTI_ALIAS_FLAG)
         mask.color = Color.WHITE
         c.drawPath(path, mask)
@@ -198,7 +273,10 @@ object AppRepo {
             0f, 0f, 0f, size.toFloat(),
             intArrayOf(0xB3FFFFFF.toInt(), 0x14FFFFFF, 0x66FFFFFF), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP
         )
-        c.drawPath(path, rim)
+        val sw = rim.strokeWidth
+        val inner = shapePath(if (shape == 4) 0 else shape, size - sw)
+        inner.offset(sw / 2f, sw / 2f)
+        c.drawPath(inner, rim)
         return out
     }
 

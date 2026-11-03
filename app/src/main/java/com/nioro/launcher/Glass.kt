@@ -208,12 +208,18 @@ object Blur {
 /** Sombra suave de icono: un único bitmap difuminado que se reutiliza bajo todos los iconos. */
 object IconShadow {
     private var bmp: Bitmap? = null
+    private var bmpShape = -1
     private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
     private val dst = RectF()
 
     private fun get(): Bitmap {
         var b = bmp
+        if (b != null && bmpShape != Prefs.iconShape) {
+            bmp = null
+            b = null
+        }
         if (b == null) {
+            bmpShape = Prefs.iconShape
             val s = 96
             val pad = 24
             b = Bitmap.createBitmap(s + pad * 2, s + pad * 2, Bitmap.Config.ARGB_8888)
@@ -221,7 +227,7 @@ object IconShadow {
             c.translate(pad.toFloat(), pad.toFloat())
             val p = Paint(Paint.ANTI_ALIAS_FLAG)
             p.color = Color.BLACK
-            c.drawPath(AppRepo.squirclePath(s.toFloat()), p)
+            c.drawPath(AppRepo.shapePath(Prefs.iconShape, s.toFloat()), p)
             b = Blur.boxBlur(b, 7)
             bmp = b
         }

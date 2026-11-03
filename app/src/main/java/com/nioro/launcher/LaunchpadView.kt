@@ -54,7 +54,7 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
         val w = width.toFloat()
         val h = height.toFloat()
         if (w <= 0f) return
-        cols = Prefs.columns
+        cols = Prefs.drawerCols.coerceIn(3, 6)
         iconSize = dp(Prefs.iconDp.toFloat() + 2f)
         top = insetTop + dp(84f)
         dotsY = h - insetBottom - dp(40f)
@@ -64,6 +64,7 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
         cap = cols * rows
         cellW = w / cols
         cellH = avail / rows
+        iconSize = min(iconSize, cellW - dp(14f)).coerceAtLeast(dp(30f))
     }
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
