@@ -23,6 +23,29 @@ class BoolPref(private val key: String, private val def: Boolean) {
     operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Boolean) = Prefs.putBool(key, value)
 }
 
+/**
+ * Huecos de la pantalla de inicio. La lista del inicio guarda, por orden de celda, la clave de
+ * cada app o [BLANK] para una celda vacía: así hay pantallas vacías y, al quitar un icono,
+ * los demás no se mueven (como en One UI).
+ */
+object HomeSlots {
+    const val BLANK = "."
+
+    /** coloca la app justo después del último icono (rellena un hueco del final si lo hay) */
+    fun add(list: MutableList<String>, key: String) {
+        var last = -1
+        for (i in list.indices) if (list[i] != BLANK) last = i
+        val at = last + 1
+        if (at < list.size) list[at] = key else list.add(key)
+    }
+
+    /** quita la app dejando su hueco */
+    fun remove(list: MutableList<String>, key: String) {
+        val i = list.indexOf(key)
+        if (i >= 0) list[i] = BLANK
+    }
+}
+
 /** Ajustes del launcher. Todo se guarda en SharedPreferences. */
 object Prefs {
     private var sp: SharedPreferences? = null
