@@ -8,8 +8,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.RectF
-import android.graphics.RenderEffect
-import android.graphics.Shader
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -29,6 +27,7 @@ class MainActivity : Activity() {
     private lateinit var recents: RecentsHost
     private lateinit var overlay: OpenOverlay
     private lateinit var menu: MenuView
+    private lateinit var backdrop: BackdropView
     private val bg = Executors.newSingleThreadExecutor()
     private var launchedApp = false
     private var lastBlur = -1f
@@ -48,7 +47,8 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Prefs.init(this)
-        window.setDecorFitsSystemWindows(false)
+        Compat.edgeToEdge(this)
+        Compat.applyRefreshRate(this)
 
         root = FrameLayout(this)
         home = HomeView(this)
@@ -56,8 +56,10 @@ class MainActivity : Activity() {
         recents = RecentsHost(this)
         overlay = OpenOverlay(this)
         menu = MenuView(this)
+        backdrop = BackdropView(this)
         val mp = FrameLayout.LayoutParams.MATCH_PARENT
         root.addView(home, FrameLayout.LayoutParams(mp, mp))
+        root.addView(backdrop, FrameLayout.LayoutParams(mp, mp))
         root.addView(drawer, FrameLayout.LayoutParams(mp, mp))
         root.addView(recents, FrameLayout.LayoutParams(mp, mp))
         root.addView(overlay, FrameLayout.LayoutParams(mp, mp))
@@ -65,11 +67,11 @@ class MainActivity : Activity() {
         setContentView(root)
 
         root.setOnApplyWindowInsetsListener { _, ins ->
-            val bars = ins.getInsets(WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-            home.setInsets(bars.top.toFloat(), bars.bottom.toFloat())
-            drawer.setInsets(bars.top.toFloat(), bars.bottom.toFloat())
-            recents.view.insetTop = bars.top.toFloat()
-            recents.view.insetBottom = bars.bottom.toFloat()
+            val (top, bottom) = Compat.bars(ins)
+            home.setInsets(top.toFloat(), bottom.toFloat())
+            drawer.setInsets(top.toFloat(), bottom.toFloat())
+            recents.view.insetTop = top.toFloat()
+            recents.view.insetBottom = bottom.toFloat()
             ins
         }
 
@@ -131,6 +133,7 @@ class MainActivity : Activity() {
         super.onResume()
         resumed = true
         overlay.hide()
+        Compat.applyRefreshRate(this)
         home.resumeClock()
         drawer.styleChanged()
         if (wasStopped) {
@@ -195,21 +198,30 @@ class MainActivity : Activity() {
     private fun updateBackdrop() {
         val p = maxOf(drawerP, recentsP)
         home.setDrawerProgress(p)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && Prefs.blur && !Prefs.saver) {
-            // radio cuantizado: solo se reconstruye el efecto cuando cambia de verdad
-            val radius = Math.round(p * 28f).toFloat()
-            if (radius != lastBlur) {
-                lastBlur = radius
-                home.setRenderEffect(
-                    if (radius < 1f) null
-                    else RenderEffect.createBlurEffect(dp(radius / 2f), dp(radius / 2f), Shader.TileMode.CLAMP)
-                )
-            }
-        } else if (lastBlur > 0f && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            lastBlur = 0f
-            home.setRenderEffect(null)
+        val blurOn = Prefs.blur && !Prefs.saver
+        if (p > 0.001f) {
+            if (blurOn && !backdrop.hasSnapshot) backdrop.capture(home)
+            backdrop.progress = p
+            home.alpha = if (backdrop.hasSnapshot) 1f - p else 1f - 0.35f * p
+        } else {
+            backdrop.release()
+            home.alpha = 1f
         }
-        home.alpha = 1f - 0.35f * p
+        wallpaperBlur(if (blurOn) p else 0f)
+    }
+
+    /** Android 12+: el sistema difumina el fondo de pantalla detrás del launcher (lo hace la GPU del compositor). */
+    private fun wallpaperBlur(p: Float) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+        try {
+            if (!windowManager.isCrossWindowBlurEnabled) return
+            val r = (p * dp(34f)).toInt() / 3 * 3
+            if (r != lastBlur.toInt()) {
+                lastBlur = r.toFloat()
+                window.setBackgroundBlurRadius(r)
+            }
+        } catch (t: Throwable) {
+        }
     }
 
     // ---------------------------------------------------------------- Abrir apps

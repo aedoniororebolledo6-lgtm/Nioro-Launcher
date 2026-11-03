@@ -44,6 +44,24 @@ abstract class AppsView(ctx: Context) : View(ctx) {
     protected val textPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
     protected val dst = RectF()
     private val labelCache = HashMap<String, String>()
+    protected val pressSp: SpringValue = ticker.add(SpringValue(1f, 700f, 53f, 0.0005f))
+    private var pressKey: String? = null
+
+    /** El icono tocado se "hunde" con un resorte rápido y vuelve con un rebote suave. */
+    protected fun press(e: AppEntry?) {
+        if (e == null) return
+        pressKey = e.key
+        pressSp.tune(700f, 1f)
+        pressSp.to(0.86f)
+        ticker.kick()
+    }
+
+    protected fun unpress() {
+        if (pressKey == null) return
+        pressSp.tune(420f, 0.5f)
+        pressSp.to(1f)
+        ticker.kick()
+    }
     private var labelWidth = 0f
 
     init {
@@ -100,8 +118,11 @@ abstract class AppsView(ctx: Context) : View(ctx) {
         val b = e.icon ?: return
         val al = (255f * a).toInt().coerceIn(0, 255)
         if (al == 0) return
+        if (pressKey != null && !pressSp.active && pressSp.target >= 1f) pressKey = null
+        val sz = if (e.key == pressKey) size * pressSp.value else size
+        IconShadow.draw(c, cx, cy, sz, a * 0.9f)
         bmpPaint.alpha = al
-        dst.set(cx - size / 2f, cy - size / 2f, cx + size / 2f, cy + size / 2f)
+        dst.set(cx - sz / 2f, cy - sz / 2f, cx + sz / 2f, cy + sz / 2f)
         c.drawBitmap(b, null, dst, bmpPaint)
     }
 

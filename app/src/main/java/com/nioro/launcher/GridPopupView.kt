@@ -43,6 +43,7 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
     private val longRun = Runnable {
         if (!moved && downIdx in shown.indices) {
             longFired = true
+            unpress()
             performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
             val r = RectF()
             itemRect(downIdx, r)
@@ -77,6 +78,7 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
         areaBottom = panel.bottom - dp(8f)
         scroll.min = 0f
         scroll.max = max(0f, rowsAll * cellH - (areaBottom - areaTop) + dp(6f))
+        scroll.dim = areaBottom - areaTop
     }
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
@@ -164,7 +166,7 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
                 vt?.recycle()
                 vt = VelocityTracker.obtain()
                 vt?.addMovement(ev)
-                scroll.sp.snap(scroll.sp.value)
+                scroll.stop()
                 downX = x
                 downY = y
                 lastY = y
@@ -172,7 +174,9 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
                 longFired = false
                 downIdx = idxAt(x, y)
                 uiHandler.removeCallbacks(longRun)
+                unpress()
                 if (downIdx >= 0) uiHandler.postDelayed(longRun, 380L)
+                if (downIdx >= 0) press(shown[downIdx])
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
@@ -181,6 +185,7 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
                 if (!moved && (abs(x - downX) > slop || abs(y - downY) > slop)) {
                     moved = true
                     uiHandler.removeCallbacks(longRun)
+                unpress()
                 }
                 if (moved) {
                     scroll.drag(-(y - lastY))
@@ -191,6 +196,7 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 uiHandler.removeCallbacks(longRun)
+                unpress()
                 val up = ev.actionMasked == MotionEvent.ACTION_UP
                 vt?.addMovement(ev)
                 if (moved) {

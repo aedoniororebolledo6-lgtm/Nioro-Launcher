@@ -21,6 +21,7 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
 
     private val pageSp = ticker.add(SpringValue(0f, 240f, 27f))
     private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val dotsRect = RectF()
     private var cols = 4
     private var rows = 5
     private var cap = 20
@@ -41,6 +42,7 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
     private val longRun = Runnable {
         if (mode == 0 && !moved && downIdx in shown.indices) {
             longFired = true
+            unpress()
             performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
             val r = RectF()
             itemRect(downIdx, r)
@@ -126,6 +128,8 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
         if (n > 1) {
             val gap = dp(15f)
             val x0 = w / 2f - (n - 1) * gap / 2f
+            dotsRect.set(x0 - dp(14f), dotsY - dp(11f), x0 + (n - 1) * gap + dp(14f), dotsY + dp(11f))
+            glass.draw(c, dotsRect, dp(11f), 0.7f * clamp01(p), false)
             for (i in 0 until n) {
                 val near = 1f - min(1f, abs(i - pv))
                 dotPaint.color = Color.argb(((90 + 165 * near) * clamp01(p)).toInt(), 255, 255, 255)
@@ -161,7 +165,9 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
                 pageSp.snap(pageSp.value)
                 downIdx = idxAt(x, y)
                 uiHandler.removeCallbacks(longRun)
+                unpress()
                 if (downIdx >= 0) uiHandler.postDelayed(longRun, 380L)
+                if (downIdx >= 0) press(shown[downIdx])
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
@@ -172,13 +178,14 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
                 if (mode == 0 && (abs(dx) > slop || abs(dy) > slop)) {
                     moved = true
                     uiHandler.removeCallbacks(longRun)
+                unpress()
                     mode = if (abs(dx) > abs(dy)) 1 else 2
                 }
                 if (mode == 1) {
                     val n = (pageCount() - 1).toFloat()
                     var t = pageStart - dx / width
-                    if (t < 0f) t *= 0.3f
-                    if (t > n) t = n + (t - n) * 0.3f
+                    if (t < 0f) t = rubber(t, 1f)
+                    if (t > n) t = n + rubber(t - n, 1f)
                     pageSp.snap(t)
                     invalidate()
                 } else if (mode == 2 && dy > dp(110f)) {
@@ -189,6 +196,7 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 uiHandler.removeCallbacks(longRun)
+                unpress()
                 val up = ev.actionMasked == MotionEvent.ACTION_UP
                 vt?.addMovement(ev)
                 if (mode == 1) {

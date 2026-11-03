@@ -50,6 +50,7 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
         val b = downBall
         if (!moved && b != null) {
             longFired = true
+            unpress()
             dragBall = null
             performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
             val r = RectF()
@@ -255,7 +256,9 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
                 longFired = false
                 downBall = hit(x, y)
                 uiHandler.removeCallbacks(longRun)
+                unpress()
                 if (downBall != null) uiHandler.postDelayed(longRun, 420L)
+                press(downBall?.e)
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
@@ -265,6 +268,7 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
                 if (!moved && (abs(x - downX) > slop || abs(y - downY) > slop)) {
                     moved = true
                     uiHandler.removeCallbacks(longRun)
+                unpress()
                     dragBall = downBall
                     if (dragBall != null) ticker.kick()
                 }
@@ -272,6 +276,7 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 uiHandler.removeCallbacks(longRun)
+                unpress()
                 val up = ev.actionMasked == MotionEvent.ACTION_UP
                 val d = dragBall
                 dragBall = null

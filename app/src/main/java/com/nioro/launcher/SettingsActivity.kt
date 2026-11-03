@@ -46,7 +46,8 @@ class SettingsActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Prefs.init(this)
-        window.setDecorFitsSystemWindows(false)
+        Compat.edgeToEdge(this)
+        Compat.applyRefreshRate(this)
         val scroll = ScrollView(this)
         scroll.background = GradientDrawable(
             GradientDrawable.Orientation.TL_BR,
@@ -58,8 +59,8 @@ class SettingsActivity : Activity() {
         col.setPadding(pad, pad, pad, pad)
         scroll.addView(col)
         scroll.setOnApplyWindowInsetsListener { v, ins ->
-            val b = ins.getInsets(android.view.WindowInsets.Type.systemBars())
-            col.setPadding(pad, pad + b.top, pad, pad + b.bottom)
+            val (top, bottom) = Compat.bars(ins)
+            col.setPadding(pad, pad + top, pad, pad + bottom)
             ins
         }
         setContentView(scroll)
@@ -103,7 +104,10 @@ class SettingsActivity : Activity() {
         }
 
         section("Batería") {
-            toggle(it, "Modo ahorro (anima a 60 Hz y sin desenfoque)", Prefs.saver) { v -> Prefs.saver = v }
+            toggle(it, "Modo ahorro (pantalla a 60 Hz y sin desenfoque)", Prefs.saver) { v ->
+                Prefs.saver = v
+                Compat.applyRefreshRate(this)
+            }
             it.addView(text("El launcher solo dibuja mientras algo se mueve. En reposo no usa CPU ni GPU.", 12.5f, false).apply {
                 alpha = 0.7f
                 setPadding(0, dp(6f).toInt(), 0, dp(4f).toInt())

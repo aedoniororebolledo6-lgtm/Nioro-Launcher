@@ -48,6 +48,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
     private val r = RectF()
     private val r2 = RectF()
     private val btn = RectF()
+    private val hdr = RectF()
     private var style = 0
 
     private var downX = 0f
@@ -108,6 +109,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
         val vis = height - insetBottom - dp(110f) - top
         gridScroll.min = 0f
         gridScroll.max = max(0f, rows * gridCellH() - vis)
+        gridScroll.dim = vis
     }
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
@@ -227,17 +229,30 @@ class RecentsView(ctx: Context) : View0(ctx) {
     }
 
     private fun drawCard(c: Canvas, e: AppEntry, rr: RectF, al: Float) {
-        val rad = dp(26f) * (rr.width() / max(1f, cardW()))
-        // tarjeta: color del icono difuminado + cristal
+        val k = rr.width() / max(1f, cardW())
+        val rad = dp(28f) * k
+        // cuerpo: color del icono + cristal encima (se ve como una ventana esmerilada de la app)
         card.color = e.tint
-        card.alpha = (200 * al).toInt()
+        card.alpha = (190 * al).toInt()
         c.drawRoundRect(rr, rad, rad, card)
         glass.draw(c, rr, rad, al)
-        val isz = min(rr.width() * 0.42f, dp(76f))
-        drawIcon(c, e, rr.centerX(), rr.centerY() - dp(8f), isz, al)
+        // "contenido" sugerido: barras de cristal suaves
+        hdr.set(rr.left + dp(16f) * k, rr.top + dp(18f) * k, rr.right - dp(16f) * k, rr.top + dp(30f) * k)
+        card.color = 0x33FFFFFF
+        card.alpha = (70 * al).toInt()
+        c.drawRoundRect(hdr, dp(6f), dp(6f), card)
+        hdr.set(rr.left + dp(16f) * k, rr.bottom - dp(46f) * k, rr.right - dp(60f) * k, rr.bottom - dp(34f) * k)
+        c.drawRoundRect(hdr, dp(6f), dp(6f), card)
+        val isz = min(rr.width() * 0.4f, dp(80f))
+        IconShadow.draw(c, rr.centerX(), rr.centerY(), isz, al)
+        drawIcon(c, e, rr.centerX(), rr.centerY(), isz, al)
+        // cabecera estilo iOS: icono pequeño + nombre encima de la tarjeta
+        val hs = dp(24f) * min(1f, k + 0.2f)
+        val hy = rr.top - dp(10f) - hs / 2f
+        drawIcon(c, e, rr.left + dp(4f) + hs / 2f, hy, hs, al)
         title.alpha = (255 * al).toInt()
-        title.textAlign = Paint.Align.CENTER
-        c.drawText(e.label, rr.centerX(), rr.centerY() + isz / 2f + dp(22f), title)
+        title.textAlign = Paint.Align.LEFT
+        c.drawText(e.label, rr.left + dp(12f) + hs, hy + dp(5f), title)
     }
 
     private fun drawIcon(c: Canvas, e: AppEntry, cx: Float, cy: Float, size: Float, a: Float) {
@@ -282,7 +297,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
                 mode = 0
                 startPos = pos.value
                 pos.snap(pos.value)
-                gridScroll.sp.snap(gridScroll.sp.value)
+                gridScroll.stop()
                 hitIdx = hit(x, y)
                 return true
             }
@@ -305,8 +320,8 @@ class RecentsView(ctx: Context) : View0(ctx) {
                         val d = if (style == 4) (dx + dy) else dx
                         var t = startPos - d / dist
                         val m = maxPos()
-                        if (t < 0f) t *= 0.3f
-                        if (t > m) t = m + (t - m) * 0.3f
+                        if (t < 0f) t = rubber(t, 1f)
+                        if (t > m) t = m + rubber(t - m, 1f)
                         pos.snap(t)
                     }
                     invalidate()

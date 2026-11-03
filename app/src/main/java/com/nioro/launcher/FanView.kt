@@ -39,6 +39,7 @@ class FanView(ctx: Context) : AppsView(ctx) {
     private val longRun = Runnable {
         if (!moved && downIdx in shown.indices) {
             longFired = true
+            unpress()
             performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
             val r = RectF()
             iconRect(downIdx, r)
@@ -66,6 +67,7 @@ class FanView(ctx: Context) : AppsView(ctx) {
         k = (w * 0.26f) / (reach * reach)
         scroll.min = 0f
         scroll.max = max(0, shown.size - visibleCount).toFloat() * step
+        scroll.dim = h * 0.5f
     }
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
@@ -163,7 +165,7 @@ class FanView(ctx: Context) : AppsView(ctx) {
                 vt?.recycle()
                 vt = VelocityTracker.obtain()
                 vt?.addMovement(ev)
-                scroll.sp.snap(scroll.sp.value)
+                scroll.stop()
                 downX = x
                 downY = y
                 lastY = y
@@ -171,7 +173,9 @@ class FanView(ctx: Context) : AppsView(ctx) {
                 longFired = false
                 downIdx = idxAt(x, y)
                 uiHandler.removeCallbacks(longRun)
+                unpress()
                 if (downIdx >= 0) uiHandler.postDelayed(longRun, 380L)
+                if (downIdx >= 0) press(shown[downIdx])
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
@@ -180,6 +184,7 @@ class FanView(ctx: Context) : AppsView(ctx) {
                 if (!moved && (abs(x - downX) > slop || abs(y - downY) > slop)) {
                     moved = true
                     uiHandler.removeCallbacks(longRun)
+                unpress()
                 }
                 if (moved) {
                     scroll.drag(y - lastY)
@@ -190,6 +195,7 @@ class FanView(ctx: Context) : AppsView(ctx) {
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 uiHandler.removeCallbacks(longRun)
+                unpress()
                 val up = ev.actionMasked == MotionEvent.ACTION_UP
                 vt?.addMovement(ev)
                 if (moved) {

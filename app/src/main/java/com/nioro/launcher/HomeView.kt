@@ -68,6 +68,11 @@ class HomeView(ctx: Context) : View(ctx) {
     private val slots = ArrayList<Slot>()
     private val pageSp = SpringValue(0f, 220f, 25f)
     private val enterSp = SpringValue(1f, 190f, 25f)
+    private val pressSp = SpringValue(1f, 700f, 53f, 0.0005f)
+    private var pressKey: String? = null
+    private var pressSlot: Slot? = null
+    private var tickSlot: Slot? = null
+    private var datePillW = 0f
     private var drawerP = 0f
     private var running: Set<String> = emptySet()
 
@@ -132,6 +137,7 @@ class HomeView(ctx: Context) : View(ctx) {
         val k = downKey
         if (touchMode == M_NONE && !moved && k == null && !inDock) {
             touchMode = M_MENU
+            unpress()
             performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
             host?.showHomeMenu(downX, downY)
         } else if (touchMode == M_NONE && !moved && k != null) {
@@ -139,6 +145,7 @@ class HomeView(ctx: Context) : View(ctx) {
             if (e != null) {
                 touchMode = M_MENU
                 scrubbing = false
+                unpress()
                 performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                 val r = RectF()
                 if (inDock) {
@@ -182,18 +189,20 @@ class HomeView(ctx: Context) : View(ctx) {
         textPaint.textAlign = Paint.Align.CENTER
         textPaint.setShadowLayer(dp(3f), 0f, dp(1f), 0x99000000.toInt())
         clockPaint.color = Color.WHITE
-        clockPaint.textSize = dp(68f)
-        clockPaint.typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+        clockPaint.textSize = dp(76f)
+        clockPaint.typeface = Typeface.create(Typeface.DEFAULT, 200, false)
+        clockPaint.letterSpacing = -0.02f
         clockPaint.textAlign = Paint.Align.CENTER
         clockPaint.setShadowLayer(dp(10f), 0f, dp(2f), 0x66000000)
         datePaint.color = 0xF2FFFFFF.toInt()
-        datePaint.textSize = dp(16f)
-        datePaint.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        datePaint.textSize = dp(15f)
+        datePaint.typeface = Typeface.create(Typeface.DEFAULT, 500, false)
         datePaint.textAlign = Paint.Align.CENTER
         datePaint.setShadowLayer(dp(6f), 0f, dp(1f), 0x66000000)
         hintPaint.color = Color.WHITE
         ticker.add(pageSp)
         ticker.add(enterSp)
+        ticker.add(pressSp)
         updateClock()
     }
 
@@ -269,7 +278,7 @@ class HomeView(ctx: Context) : View(ctx) {
         dockH = dp(Prefs.dockDp.toFloat()) + dp(22f)
         dockCy = dockBottom - dockH / 2f
         dotsY = dockBottom - dockH - dp(22f)
-        gridTop = insetTop + dp(132f)
+        gridTop = insetTop + dp(146f)
         val avail = dotsY - dp(16f) - gridTop
         val labelH = if (Prefs.labels) dp(20f) else 0f
         val minCell = iconPx + labelH + dp(24f)
@@ -290,6 +299,9 @@ class HomeView(ctx: Context) : View(ctx) {
         ticker.springs.clear()
         ticker.springs.add(pageSp)
         ticker.springs.add(enterSp)
+        ticker.springs.add(pressSp)
+        pressSlot = null
+        tickSlot = null
         for (s in slots) {
             ticker.springs.add(s.sc)
             ticker.springs.add(s.by)
@@ -365,6 +377,7 @@ class HomeView(ctx: Context) : View(ctx) {
         timeStr = SimpleDateFormat(DateFormat.getBestDateTimePattern(loc, "jm"), loc).format(Date(now))
         dateStr = SimpleDateFormat(DateFormat.getBestDateTimePattern(loc, "EEEEdMMMM"), loc).format(Date(now))
         dateStr = dateStr.replaceFirstChar { if (it.isLowerCase()) it.titlecase(loc) else it.toString() }
+        datePillW = 0f
         return true
     }
 
@@ -386,6 +399,29 @@ class HomeView(ctx: Context) : View(ctx) {
 
     private fun dockTopY(): Float = dockCy - dockH / 2f - dp(8f)
 
+    // ---------------------------------------------------------------- Iconos que se "hunden" al tocar
+    private fun press(key: String?, slot: Slot?) {
+        pressKey = key
+        pressSlot = slot
+        pressSp.tune(700f, 1f)
+        pressSp.to(0.86f)
+        ticker.kick()
+    }
+
+    private fun unpress() {
+        if (pressKey == null && pressSlot == null) return
+        pressSp.tune(420f, 0.5f)
+        pressSp.to(1f)
+        ticker.kick()
+        if (!pressSp.active) {
+            pressKey = null
+            pressSlot = null
+        }
+    }
+
+    private fun pressScaleFor(key: String?): Float =
+        if (key != null && key == pressKey) pressSp.value else 1f
+
     // ---------------------------------------------------------------- Física del dock
     private fun updateDockTargets() {
         val amt = Prefs.magnify / 100f * 0.9f
@@ -399,6 +435,10 @@ class HomeView(ctx: Context) : View(ctx) {
 
     private fun onFrame(dt: Float): Boolean {
         if (scrubbing) updateDockTargets()
+        if (!pressSp.active && pressSp.target >= 1f) {
+            pressKey = null
+            pressSlot = null
+        }
         invalidate()
         return scrubbing
     }
@@ -474,9 +514,13 @@ class HomeView(ctx: Context) : View(ctx) {
         updateClock()
         val cx = width / 2f
         clockPaint.alpha = (255 * a).toInt().coerceIn(0, 255)
-        datePaint.alpha = (242 * a).toInt().coerceIn(0, 255)
-        c.drawText(timeStr, cx, insetTop + dp(84f) + dy, clockPaint)
-        c.drawText(dateStr, cx, insetTop + dp(112f) + dy, datePaint)
+        datePaint.alpha = (245 * a).toInt().coerceIn(0, 255)
+        c.drawText(timeStr, cx, insetTop + dp(88f) + dy, clockPaint)
+        if (datePillW <= 0f) datePillW = datePaint.measureText(dateStr) + dp(30f)
+        val py = insetTop + dp(100f) + dy
+        tmpRect.set(cx - datePillW / 2f, py, cx + datePillW / 2f, py + dp(30f))
+        glass.draw(c, tmpRect, dp(15f), a * 0.85f, false)
+        c.drawText(dateStr, cx, py + dp(20.5f), datePaint)
     }
 
     private fun labelOf(e: AppEntry): String {
@@ -492,8 +536,10 @@ class HomeView(ctx: Context) : View(ctx) {
         val b = e.icon ?: return
         val al = (255f * a).toInt().coerceIn(0, 255)
         if (al == 0) return
+        val sz = size * pressScaleFor(e.key)
+        IconShadow.draw(c, cx, cy, sz, a)
         bmpPaint.alpha = al
-        dst.set(cx - size / 2f, cy - size / 2f, cx + size / 2f, cy + size / 2f)
+        dst.set(cx - sz / 2f, cy - sz / 2f, cx + sz / 2f, cy + sz / 2f)
         c.drawBitmap(b, null, dst, bmpPaint)
         if (label && Prefs.labels) {
             textPaint.alpha = al
@@ -574,6 +620,8 @@ class HomeView(ctx: Context) : View(ctx) {
         val pv = pageSp.value
         val gap = dp(15f)
         val x0 = width / 2f - (n - 1) * gap / 2f
+        tmpRect.set(x0 - dp(14f), dotsY - dp(11f), x0 + (n - 1) * gap + dp(14f), dotsY + dp(11f))
+        glass.draw(c, tmpRect, dp(11f), 0.7f, false)
         for (i in 0 until n) {
             val near = 1f - min(1f, abs(i - pv))
             dotPaint.color = Color.argb((90 + 165 * near).toInt(), 255, 255, 255)
@@ -626,12 +674,13 @@ class HomeView(ctx: Context) : View(ctx) {
             }
             if (bmp == null) continue
             if (touchMode == M_DRAG && dragFromDock && s.key == dragKey) continue
-            val scale = s.scale * (1f + s.bs.value)
+            val scale = s.scale * (1f + s.bs.value) * (if (s === pressSlot) pressSp.value else 1f)
             val size = dockIconPx * scale
             val lift = (s.scale - 1f) * dockIconPx * lf
             val bounceUp = max(0f, s.by.value) * dockIconPx
             val cx = s.cx + s.bx.value * dockIconPx * 0.5f
             val cy = baseBottom - size / 2f - lift - bounceUp
+            IconShadow.draw(c, cx, cy, size, a * 0.8f)
             dst.set(cx - size / 2f, cy - size / 2f, cx + size / 2f, cy + size / 2f)
             bmpPaint.alpha = (255 * a).toInt().coerceIn(0, 255)
             if (s.br.value != 0f) {
@@ -691,13 +740,14 @@ class HomeView(ctx: Context) : View(ctx) {
 
     private fun cancelLong() {
         handler.removeCallbacks(longRun)
+        unpress()
     }
 
     private fun setPageDrag(v: Float) {
         val n = (pageCount() - 1).toFloat()
         var t = v
-        if (t < 0f) t *= 0.3f
-        if (t > n) t = n + (t - n) * 0.3f
+        if (t < 0f) t = rubber(t, 1f)
+        if (t > n) t = n + rubber(t - n, 1f)
         pageSp.snap(t)
     }
 
@@ -738,8 +788,12 @@ class HomeView(ctx: Context) : View(ctx) {
                 if (inDock) {
                     scrubbing = true
                     scrubX = x
+                    tickSlot = slotAt(x)
+                    press(null, tickSlot)
                     updateDockTargets()
                     ticker.kick()
+                } else if (downKey != null) {
+                    press(downKey, null)
                 }
                 return true
             }
@@ -782,6 +836,12 @@ class HomeView(ctx: Context) : View(ctx) {
                     if (scrubbing) {
                         updateDockTargets()
                         ticker.kick()
+                        // vibración suave al pasar de un icono a otro (como el trackpad de un Mac)
+                        val now = slotAt(scrubX)
+                        if (now != null && now !== tickSlot && moved) {
+                            tickSlot = now
+                            performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        }
                     }
                 } else {
                     if (touchMode == M_NONE && (abs(dx) > slop || abs(dy) > slop)) {

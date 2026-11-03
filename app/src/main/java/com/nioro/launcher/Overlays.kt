@@ -10,6 +10,7 @@ import android.graphics.RectF
 import android.graphics.drawable.Drawable
 import android.view.MotionEvent
 import android.view.View
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
@@ -86,7 +87,8 @@ class OpenOverlay(ctx: Context) : View(ctx) {
     private fun onFrame(): Boolean {
         val p = sp.value
         // Se lanza cuando la ventana ya cubre casi toda la pantalla.
-        val fireAt = if (style == 1) 0.78f else 0.86f
+        // Se lanza pronto: la ventana de la app aparece mientras la animación sigue (menos espera).
+        val fireAt = if (style == 4) 0.4f else 0.5f
         if (!fired && (p >= fireAt || !sp.active)) {
             fired = true
             onLaunch?.invoke()
@@ -251,5 +253,64 @@ class MenuView(ctx: Context) : View(ctx) {
     override fun onDetachedFromWindow() {
         ticker.stop()
         super.onDetachedFromWindow()
+    }
+}
+
+/**
+ * Fondo esmerilado barato: al abrir un panel se toma UNA foto pequeña (1/6) del inicio,
+ * se difumina una vez en CPU y luego solo se dibuja con transparencia. Cada fotograma cuesta
+ * lo mismo que dibujar una imagen, así que la animación va fluida incluso en móviles modestos.
+ */
+class BackdropView(ctx: Context) : View(ctx) {
+    private var bmp: android.graphics.Bitmap? = null
+    private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+    private val dst = RectF()
+    var progress = 0f
+        set(v) {
+            if (abs(v - field) > 0.002f) {
+                field = v
+                invalidate()
+            }
+        }
+
+    init {
+        visibility = INVISIBLE
+    }
+
+    val hasSnapshot: Boolean get() = bmp != null
+
+    fun capture(src: View) {
+        val w = src.width
+        val h = src.height
+        if (w <= 0 || h <= 0) return
+        val s = 6
+        try {
+            val b = android.graphics.Bitmap.createBitmap(max(1, w / s), max(1, h / s), android.graphics.Bitmap.Config.ARGB_8888)
+            val c = Canvas(b)
+            c.scale(1f / s, 1f / s)
+            val a = src.alpha
+            src.alpha = 1f
+            src.draw(c)
+            src.alpha = a
+            bmp?.recycle()
+            bmp = Blur.boxBlur(b, 4)
+            visibility = VISIBLE
+            invalidate()
+        } catch (t: Throwable) {
+            bmp = null
+        }
+    }
+
+    fun release() {
+        visibility = INVISIBLE
+        bmp?.recycle()
+        bmp = null
+    }
+
+    override fun onDraw(c: Canvas) {
+        val b = bmp ?: return
+        paint.alpha = (255 * clamp01(progress)).toInt()
+        dst.set(0f, 0f, width.toFloat(), height.toFloat())
+        c.drawBitmap(b, null, dst, paint)
     }
 }

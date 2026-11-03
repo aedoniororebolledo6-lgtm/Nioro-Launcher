@@ -46,6 +46,7 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
     private val longRun = Runnable {
         if (!moved && downRow in rows.indices && rows[downRow].entry != null) {
             longFired = true
+            unpress()
             performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
             val r = RectF()
             val ry = panel.top + dp(8f) + rows[downRow].y - scroll.value
@@ -100,6 +101,7 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
         contentH = y
         scroll.min = 0f
         scroll.max = max(0f, contentH - (panel.height() - dp(16f)))
+        scroll.dim = panel.height()
     }
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
@@ -196,7 +198,7 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
         bubbleChar = letters[i]
         for (r in rows) {
             if (r.entry == null && r.header == bubbleChar) {
-                scroll.sp.snap(min(r.y, scroll.max))
+                scroll.jump(min(r.y, scroll.max))
                 break
             }
         }
@@ -212,7 +214,7 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
                 vt?.recycle()
                 vt = VelocityTracker.obtain()
                 vt?.addMovement(ev)
-                scroll.sp.snap(scroll.sp.value)
+                scroll.stop()
                 downX = x
                 downY = y
                 lastY = y
@@ -225,7 +227,9 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
                 }
                 downRow = rowAt(x, y)
                 uiHandler.removeCallbacks(longRun)
+                unpress()
                 if (downRow >= 0) uiHandler.postDelayed(longRun, 380L)
+                if (downRow >= 0) press(rows[downRow].entry)
                 invalidate()
                 return true
             }
@@ -239,6 +243,7 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
                 if (!moved && (abs(x - downX) > slop || abs(y - downY) > slop)) {
                     moved = true
                     uiHandler.removeCallbacks(longRun)
+                unpress()
                 }
                 if (moved) {
                     scroll.drag(-(y - lastY))
@@ -249,6 +254,7 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 uiHandler.removeCallbacks(longRun)
+                unpress()
                 val up = ev.actionMasked == MotionEvent.ACTION_UP
                 vt?.addMovement(ev)
                 if (onIndex) {
