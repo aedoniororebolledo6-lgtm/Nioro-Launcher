@@ -113,7 +113,17 @@ class HomeView(ctx: Context) : View(ctx) {
     private val ckS = SpringValue(1f, 260f, 18f, 0.001f)
     /** rebote de la burbuja-opción recién tocada */
     private val chipPulse = SpringValue(1f, 520f, 16f, 0.002f)
-    private val extraSprings = arrayOf(dragLift, dragTilt, dropX, dropY, clockSp, dotsBoost, clockEd, clockPop, clockSqu, ckX, ckY, ckS, chipPulse)
+    // ---- menú dock del reloj
+    /** indicador de pestaña: se desliza entre pestañas y se estira con la velocidad */
+    private val tabSp = SpringValue(0f, 420f, 28f, 0.002f)
+    /** el contenido de la pestaña nueva entra deslizándose y apareciendo */
+    private val tabFade = SpringValue(1f, 320f, 30f, 0.002f)
+    /** tirar del menú hacia abajo para cerrarlo */
+    private val sheetPull = SpringValue(0f, 360f, 30f, 0.3f)
+    private val extraSprings = arrayOf(dragLift, dragTilt, dropX, dropY, clockSp, dotsBoost, clockEd, clockPop, clockSqu, ckX, ckY, ckS, chipPulse,
+        tabSp, tabFade, sheetPull)
+    /** carrusel de los 20 diseños (inercia y rebote en los bordes) */
+    private val designScroll = Scroll1D(ticker)
     var isClockEditing = false
         private set
     private var ceMode = 0 // 0 nada, 1 mover, 2 tirador de tamaño, 3 pellizco, 4 opción
@@ -126,28 +136,47 @@ class HomeView(ctx: Context) : View(ctx) {
     private var ceStartS = 1f
     private var ceStartD = 1f
     private var ceMoved = false
-    private var ceChip = -1
     private var pulseIdx = -1
     private val bubble = RectF()
     private val clockBox = RectF()
-    /**
-     * Burbujas del editor: 0-6 diseños, 7-14 colores (círculos), 15-19 formatos,
-     * 20 Fecha, 21 Restablecer, 22 Listo.
-     */
-    private val chipRects = Array(23) { RectF() }
-    private val chipLabels = arrayOf(
-        "Nioro", "Apilado", "Grande", "Analógico", "Fino", "Cápsula", "Neón",
-        "", "", "", "", "", "", "", "",
-        "Sistema", "12 h", "24 h", "Cero inicial", "12·30",
-        "Fecha", "Restablecer", "Listo"
-    )
-    /** valor de Prefs.clockStyle de cada burbuja de diseño (2 = sin reloj no se ofrece aquí) */
-    private val chStyles = intArrayOf(0, 1, 3, 4, 5, 6, 7)
-    /** colores de la paleta (S.PAL): automático, cian, azul, rosa, amarillo, verde, naranja, morado */
-    private val chColors = intArrayOf(0, 4, 3, 11, 8, 6, 9, 13)
-    private val chipGroups = arrayOf(0..6, 7..14, 15..19, 20..22)
-    private var chipsKey = -1f
     private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val sheetRect = RectF()
+    private var sheetTab = 0
+    private var tabDir = 1f
+    private val tabNames = arrayOf("Diseños", "Colores", "Formato", "Posición")
+    /** orden de los 20 diseños en el carrusel (valor de Prefs.clockStyle; 2 = sin reloj no está) */
+    private val designOrder = intArrayOf(0, 1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20)
+    private val designNames = arrayOf(
+        "Nioro", "Apilado", "Grande", "Analógico", "Fino", "Cápsula", "Neón", "Contorno", "Retro", "Minimal",
+        "Anillo", "Palabras", "Lateral", "Burbujas", "Degradado", "Calendario", "Doble zona", "Puntos", "Segmentos", "Arco del día"
+    )
+    /** colores de la paleta S.PAL que se ofrecen: automático, blanco, cian, azul, índigo, morado, magenta, rosa, rojo, naranja, amarillo, verde */
+    private val paletteMain = intArrayOf(0, 1, 4, 3, 14, 13, 12, 11, 10, 9, 8, 6)
+    private val fmtLabels = arrayOf("Sistema", "12 h", "24 h", "Cero inicial", "Separador ·", "a. m./p. m.", "Fecha", "Saludo", "Píldora de fecha")
+    private val alignLabels = arrayOf("Izquierda", "Centro", "Derecha")
+    private val alignValues = intArrayOf(1, 0, 2)
+    // registro de zonas tocables del menú (se rellena al dibujar)
+    private val hitRects = Array(72) { RectF() }
+    private val hitIds = IntArray(72)
+    private var hitN = 0
+    private var shPress = -1
+    private var shMode = 0 // 0 toque, 1 carrusel, 2 deslizador, 3 tirar para cerrar, 4 nada
+    private var shWasMoving = false
+    private var shVt: VelocityTracker? = null
+    private val tmpR = RectF()
+    private val tmpR2 = RectF()
+    private val cardR = RectF()
+    private val sliderRect = RectF()
+    private val sheetTitle = TextPaint(Paint.ANTI_ALIAS_FLAG)
+    private val sheetSmall = TextPaint(Paint.ANTI_ALIAS_FLAG)
+    // miniaturas: se dibuja el diseño real a escala dentro de su tarjeta
+    private val thumbBounds = Array(21) { RectF() }
+    private var styleOverride = -1
+    private var thumb = false
+    private val saveClockR = RectF()
+    private val saveDateR = RectF()
+    private val faces = ClockFaces()
+    private val info = ClockInfo()
     private val chipText = TextPaint(Paint.ANTI_ALIAS_FLAG)
     private val chipFill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val scrimPaint = Paint()
@@ -340,6 +369,12 @@ class HomeView(ctx: Context) : View(ctx) {
         chipText.textSize = dp(13.5f)
         chipText.textAlign = Paint.Align.CENTER
         chipText.typeface = Typeface.create(Typeface.DEFAULT, 500, false)
+        sheetTitle.color = Color.WHITE
+        sheetTitle.textSize = dp(21f)
+        sheetTitle.typeface = Typeface.create(Typeface.DEFAULT, 700, false)
+        sheetSmall.color = Color.WHITE
+        sheetSmall.textSize = dp(12.5f)
+        sheetSmall.typeface = Typeface.create(Typeface.DEFAULT, 500, false)
         stackPaint.color = Color.WHITE
         stackPaint.textSize = dp(96f)
         stackPaint.typeface = Typeface.create(Typeface.DEFAULT, 300, false)
@@ -521,7 +556,7 @@ class HomeView(ctx: Context) : View(ctx) {
             3 -> dp(296f)
             4 -> dp(262f)
             6 -> dp(112f)
-            else -> dp(146f)
+            else -> if (Prefs.clockStyle >= 8) dp(ClockFaces.gridTopDp(Prefs.clockStyle)) else dp(146f)
         } + dp(S.f(S.H_TOP)) + (if (S.b(S.DT_GREETING) && Prefs.clockStyle != 2) dp(22f) else 0f)
         val avail = dotsY - dp(16f) - gridTop - dp(S.f(S.H_BOTTOM))
         val labelH = if (Prefs.labels) dp(Prefs.labelSize + 8f) else 0f
@@ -567,6 +602,7 @@ class HomeView(ctx: Context) : View(ctx) {
         neonDate.color = neon
         neonPaint.setShadowLayer(dp(16f), 0f, 0f, (neon and 0x00FFFFFF) or (0xDD shl 24))
         neonDate.setShadowLayer(dp(8f), 0f, 0f, (neon and 0x00FFFFFF) or (0xBB shl 24))
+        faces.refresh()
         datePillW = 0f
         lastMinute = -1L
         labelCache.clear()
@@ -618,6 +654,7 @@ class HomeView(ctx: Context) : View(ctx) {
         ticker.springs.add(editSp)
         ticker.springs.add(dockShrink)
         for (x in extraSprings) ticker.springs.add(x)
+        ticker.springs.add(designScroll)
         pressSlot = null
         tickSlot = null
         var grew = false
@@ -770,7 +807,45 @@ class HomeView(ctx: Context) : View(ctx) {
         val hr = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
         greetStr = Tx.str(S.TX_GREETING, if (hr in 5..11) "Buenos días" else if (hr in 12..19) "Buenas tardes" else "Buenas noches")
         datePillW = 0f
+        fillInfo(d, loc, is24, zero)
         return true
+    }
+
+    /** rellena lo que usan los diseños 8-20: palabras, día del mes, segunda ciudad... */
+    private fun fillInfo(d: Date, loc: Locale, is24: Boolean, zero: Boolean) {
+        info.time = timeStr
+        info.prevTime = prevTime
+        info.hour = hourStr
+        info.prevHour = prevHour
+        info.min = minStr
+        info.prevMin = prevMin
+        info.date = dateStr
+        info.h24 = curHour24
+        info.m = curMinute
+        info.prevH24 = prevHour24
+        info.prevM = prevMinute
+        info.dayNum = SimpleDateFormat("d", loc).format(d)
+        info.weekday = SimpleDateFormat("EEEE", loc).format(d).replaceFirstChar { it.titlecase(loc) }
+        info.monthYear = SimpleDateFormat("MMMM yyyy", loc).format(d)
+        val (w1, w2) = ClockFaces.words(curHour24, curMinute)
+        if (w1 != info.words1 || w2 != info.words2) {
+            info.prevWords1 = info.words1
+            info.prevWords2 = info.words2
+            info.words1 = w1
+            info.words2 = w2
+        }
+        val zi = S.i(S.CK_ZONE2).coerceIn(0, ClockFaces.ZONES.size - 1)
+        val tz = java.util.TimeZone.getTimeZone(ClockFaces.ZONES[zi])
+        val f2 = SimpleDateFormat(if (is24) (if (zero) "HH:mm" else "H:mm") else (if (zero) "hh:mm" else "h:mm"), loc)
+        f2.timeZone = tz
+        info.zone2 = f2.format(d)
+        info.zone2Label = ClockFaces.ZONE_NAMES[zi]
+        val diff = (tz.getOffset(d.time) - java.util.TimeZone.getDefault().getOffset(d.time)) / 3_600_000f
+        info.zone2Diff = when {
+            abs(diff) < 0.01f -> "misma hora"
+            diff == diff.toInt().toFloat() -> (if (diff > 0) "+" else "−") + abs(diff.toInt()) + " h"
+            else -> (if (diff > 0) "+" else "−") + String.format(loc, "%.1f", abs(diff)) + " h"
+        }
     }
 
     private fun iconCenterY(row: Int): Float =
@@ -936,53 +1011,344 @@ class HomeView(ctx: Context) : View(ctx) {
 
     private fun zeroOn(): Boolean = when (S.i(S.CK_ZERO)) { 1 -> true; 2 -> false; else -> is24() }
 
-    private fun isDot(i: Int): Boolean = i in 7..14
+    private fun designName(st: Int): String {
+        val j = designOrder.indexOf(st)
+        return if (j >= 0) designNames[j] else ""
+    }
 
-    private fun chipSelected(i: Int): Boolean = when {
-        i <= 6 -> Prefs.clockStyle == chStyles[i]
-        i <= 14 -> S.i(S.tp(S.TX_CLOCK, S.TP_COLOR)) == chColors[i - 7]
-        i <= 17 -> S.i(S.CK_FORMAT) == i - 15
-        i == 18 -> zeroOn()
-        i == 19 -> S.i(S.CK_SEPCH) == 1
-        i == 20 -> S.b(S.DT_SHOW)
-        i == 22 -> true
+    private fun hit(r: RectF, id: Int) {
+        if (hitN < hitRects.size) {
+            hitRects[hitN].set(r)
+            hitIds[hitN] = id
+            hitN++
+        }
+    }
+
+    private fun hitAt(x: Float, y: Float): Int {
+        for (i in hitN - 1 downTo 0) if (hitRects[i].contains(x, y)) return hitIds[i]
+        return -1
+    }
+
+    /** escala de una zona: se hunde al tocarla y late al elegirla */
+    private fun itemScale(id: Int): Float =
+        (if (id == shPress && shMode == 0) 0.94f else 1f) * (if (id == pulseIdx) chipPulse.value else 1f)
+
+    /** pastilla de cristal (rellena de color si está elegida) */
+    private fun pill(c: Canvas, r: RectF, label: String, sel: Boolean, col: Int, a: Float, id: Int) {
+        val s = itemScale(id)
+        c.save()
+        c.scale(s, s, r.centerX(), r.centerY())
+        if (sel) {
+            chipFill.color = col
+            chipFill.alpha = (215 * a).toInt()
+            c.drawRoundRect(r, r.height() / 2f, r.height() / 2f, chipFill)
+        }
+        glass.draw(c, r, r.height() / 2f, a * (if (sel) 0.5f else 0.9f), false, S.SF_EDIT_BTN)
+        chipText.alpha = (255 * a).toInt()
+        c.drawText(label, r.centerX(), r.centerY() + dp(5f), chipText)
+        c.restore()
+        hit(r, id)
+    }
+
+    /** fila(s) de pastillas que se ajustan al ancho; devuelve la y donde termina */
+    private fun pillRow(c: Canvas, l: Float, r: Float, y0: Float, labels: Array<String>, from: Int, to: Int, idBase: Int, a: Float): Float {
+        val h = dp(38f)
+        val gap = dp(8f)
+        var y = y0
+        var i = from
+        while (i <= to) {
+            var rowW = chipText.measureText(labels[i]) + dp(30f)
+            var j = i + 1
+            while (j <= to && rowW + gap + chipText.measureText(labels[j]) + dp(30f) <= r - l) {
+                rowW += gap + chipText.measureText(labels[j]) + dp(30f)
+                j++
+            }
+            var x = l
+            for (k in i until j) {
+                val w = chipText.measureText(labels[k]) + dp(30f)
+                tmpR.set(x, y, x + w, y + h)
+                pill(c, tmpR, labels[k], fmtSelected(idBase + k), OneColors.ACCENT, a, idBase + k)
+                x += w + gap
+            }
+            y += h + dp(10f)
+            i = j
+        }
+        return y
+    }
+
+    private fun fmtSelected(id: Int): Boolean = when (id) {
+        4000, 4001, 4002 -> S.i(S.CK_FORMAT) == id - 4000
+        4003 -> zeroOn()
+        4004 -> S.i(S.CK_SEPCH) == 1
+        4005 -> S.b(S.CK_AMPM)
+        4006 -> S.b(S.DT_SHOW)
+        4007 -> S.b(S.DT_GREETING)
+        4008 -> S.b(S.DT_PILL)
+        5000, 5001, 5002 -> S.i(S.CK_ALIGN) == id - 5000
         else -> false
     }
 
-    private fun chipW(i: Int): Float = if (isDot(i)) dp(34f) else chipText.measureText(chipLabels[i]) + dp(28f)
-
-    /** coloca las burbujas en filas que se ajustan solas al ancho, justo encima del dock (se calcula una vez) */
-    private fun layoutChips() {
-        val bottom = (if (S.b(S.K_SHOW)) dockTopY() else height - insetBottom - dp(20f)) - dp(18f)
-        val key = width * 100000f + bottom
-        if (key == chipsKey) return
-        chipsKey = key
-        val maxW = width - dp(24f)
-        val gap = dp(8f)
-        val h = dp(38f)
-        var y = 0f
-        for (g in chipGroups) {
-            var i = g.first
-            while (i <= g.last) {
-                var rowW = chipW(i)
-                var j = i + 1
-                while (j <= g.last && rowW + gap + chipW(j) <= maxW) {
-                    rowW += gap + chipW(j)
-                    j++
-                }
-                var x = (width - rowW) / 2f
-                for (k in i until j) {
-                    val cw = chipW(k)
-                    val ch = if (isDot(k)) dp(34f) else h
-                    chipRects[k].set(x, y + (h - ch) / 2f, x + cw, y + (h + ch) / 2f)
-                    x += cw + gap
-                }
-                y += h + dp(9f)
-                i = j
-            }
+    /** círculo de color de la paleta (el automático lleva una "A") */
+    private fun colorDot(c: Canvas, cx: Float, cy: Float, d: Float, pal: Int, sel: Boolean, a: Float, id: Int) {
+        val s = itemScale(id)
+        val rad = d / 2f * s
+        chipFill.color = if (pal == 0) Color.WHITE else S.PAL[pal]
+        chipFill.alpha = (240 * a).toInt()
+        c.drawCircle(cx, cy, rad - dp(3f), chipFill)
+        if (pal == 0) {
+            chipText.color = 0xFF1B2440.toInt()
+            chipText.alpha = (255 * a).toInt()
+            c.drawText("A", cx, cy + dp(5f), chipText)
+            chipText.color = Color.WHITE
         }
-        val top = bottom - (y - dp(9f))
-        for (r in chipRects) r.offset(0f, top)
+        ringPaint.color = Color.WHITE
+        ringPaint.strokeWidth = if (sel) dp(2.5f) else dp(1f)
+        ringPaint.alpha = ((if (sel) 255 else 90) * a).toInt()
+        c.drawCircle(cx, cy, if (sel) rad + dp(1.5f) else rad - dp(3f), ringPaint)
+        tmpR2.set(cx - d / 2f, cy - d / 2f, cx + d / 2f, cy + d / 2f)
+        hit(tmpR2, id)
+    }
+
+    private fun colorRow(c: Canvas, l: Float, r: Float, y0: Float, idBase: Int, current: Int, a: Float): Float {
+        val d = dp(34f)
+        val gap = dp(9f)
+        val perRow = max(1, ((r - l + gap) / (d + gap)).toInt())
+        var y = y0 + d / 2f
+        for (n in paletteMain.indices) {
+            val col = n % perRow
+            if (n > 0 && col == 0) y += d + dp(8f)
+            val pal = paletteMain[n]
+            colorDot(c, l + col * (d + gap) + d / 2f, y, d, pal, current == pal, a, idBase + pal)
+        }
+        return y + d / 2f + dp(6f)
+    }
+
+    /** miniatura en vivo de un diseño: el reloj real dibujado a escala dentro de [r] */
+    private fun thumbClock(c: Canvas, st: Int, r: RectF, a: Float) {
+        saveClockR.set(clockRect)
+        saveDateR.set(dateRect)
+        val b = thumbBounds[st]
+        if (b.isEmpty) b.set(0f, insetTop, width.toFloat(), insetTop + dp(if (st >= 8) ClockFaces.gridTopDp(st) else 220f))
+        val k = min(r.width() / max(1f, b.width()), r.height() / max(1f, b.height())) * 0.86f
+        c.save()
+        c.clipRect(r)
+        c.translate(r.centerX(), r.centerY())
+        c.scale(k, k)
+        c.translate(-b.centerX(), -b.centerY())
+        styleOverride = st
+        thumb = true
+        drawClockRaw(c, false)
+        thumb = false
+        styleOverride = -1
+        c.restore()
+        // se recuerda lo que ocupa de verdad para centrarlo mejor en el próximo fotograma
+        if (!clockRect.isEmpty) {
+            tmpR2.set(clockRect)
+            if (!dateRect.isEmpty) tmpR2.union(dateRect)
+            b.set(tmpR2)
+        }
+        clockRect.set(saveClockR)
+        dateRect.set(saveDateR)
+    }
+
+    /** el menú dock: panel de cristal que sube desde abajo con rebote */
+    private fun drawSheet(c: Canvas, ce: Float, a: Float) {
+        hitN = 0
+        val sh = min(dp(392f), height * 0.56f)
+        val left = dp(10f)
+        val right = width - dp(10f)
+        val bottom = height - insetBottom - dp(10f)
+        // ce pasa un poco de 1 con el rebote: el menú sube de más y se asienta, como un dock
+        val lift = (1f - ce) * (sh + dp(60f)) + max(0f, sheetPull.value)
+        sheetRect.set(left, bottom - sh + lift, right, bottom + lift)
+        chipFill.color = 0xFF0B1124.toInt()
+        chipFill.alpha = (120 * a).toInt()
+        c.drawRoundRect(sheetRect, dp(34f), dp(34f), chipFill)
+        glass.draw(c, sheetRect, dp(34f), a, true, S.SF_DOCK)
+        c.save()
+        c.clipRect(sheetRect)
+        val top = sheetRect.top
+        // asa para tirar hacia abajo
+        chipFill.color = Color.WHITE
+        chipFill.alpha = (110 * a).toInt()
+        tmpR.set(sheetRect.centerX() - dp(20f), top + dp(9f), sheetRect.centerX() + dp(20f), top + dp(14f))
+        c.drawRoundRect(tmpR, dp(2.5f), dp(2.5f), chipFill)
+        // título y diseño actual
+        sheetTitle.textAlign = Paint.Align.LEFT
+        sheetTitle.alpha = (255 * a).toInt()
+        c.drawText("Reloj", left + dp(22f), top + dp(44f), sheetTitle)
+        sheetSmall.textAlign = Paint.Align.LEFT
+        sheetSmall.alpha = (170 * a).toInt()
+        c.drawText(designName(Prefs.clockStyle), left + dp(30f) + sheetTitle.measureText("Reloj"), top + dp(43f), sheetSmall)
+        // botón Listo
+        val lw = chipText.measureText("Listo") + dp(34f)
+        tmpR.set(right - dp(16f) - lw, top + dp(20f), right - dp(16f), top + dp(54f))
+        pill(c, tmpR, "Listo", true, 0xFF2FC26B.toInt(), a, 6000)
+        // pestañas con indicador que se desliza y se estira
+        val tl = left + dp(16f)
+        val tr = right - dp(16f)
+        val ty = top + dp(66f)
+        val tb = ty + dp(40f)
+        tmpR.set(tl, ty, tr, tb)
+        glass.draw(c, tmpR, dp(20f), a * 0.7f, false, S.SF_EDIT_BTN)
+        val segW = (tr - tl) / tabNames.size
+        val stretch = min(0.35f, abs(tabSp.velocity) * 0.05f) * segW
+        val ix = tl + segW * tabSp.value
+        tmpR.set(ix + dp(3f) - stretch / 2f, ty + dp(3f), ix + segW - dp(3f) + stretch / 2f, tb - dp(3f))
+        chipFill.color = OneColors.ACCENT
+        chipFill.alpha = (225 * a).toInt()
+        c.drawRoundRect(tmpR, tmpR.height() / 2f, tmpR.height() / 2f, chipFill)
+        for (t in tabNames.indices) {
+            val cx = tl + segW * (t + 0.5f)
+            chipText.alpha = ((if (t == sheetTab) 255 else 170) * a).toInt()
+            c.drawText(tabNames[t], cx, ty + dp(25f), chipText)
+            tmpR.set(tl + segW * t, ty, tl + segW * (t + 1), tb)
+            hit(tmpR, 1000 + t)
+        }
+        // contenido de la pestaña
+        val ct = tb + dp(14f)
+        val cb = sheetRect.bottom - dp(12f)
+        val fa = clamp01(tabFade.value)
+        val ca = a * fa
+        c.save()
+        c.translate((1f - fa) * dp(28f) * tabDir, 0f)
+        when (sheetTab) {
+            0 -> drawDesignsTab(c, tl, tr, ct, cb, ca)
+            1 -> drawColorsTab(c, tl, tr, ct, ca)
+            2 -> drawFormatTab(c, tl, tr, ct, ca)
+            else -> drawPositionTab(c, tl, tr, ct, ca)
+        }
+        c.restore()
+        c.restore()
+    }
+
+    /** carrusel de 2 filas con los 20 diseños, cada tarjeta con su miniatura en vivo */
+    private fun drawDesignsTab(c: Canvas, tl: Float, tr: Float, ct: Float, cb: Float, a: Float) {
+        val cw = dp(98f)
+        val chh = dp(88f)
+        val gap = dp(12f)
+        val rowH = chh + dp(28f)
+        val colsN = (designOrder.size + 1) / 2
+        designScroll.min = 0f
+        designScroll.max = max(0f, colsN * (cw + gap) - gap - (tr - tl))
+        designScroll.dim = tr - tl
+        c.save()
+        c.clipRect(tl - dp(6f), ct - dp(6f), tr + dp(6f), cb)
+        for (j in designOrder.indices) {
+            val col = j / 2
+            val row = j % 2
+            val x0 = tl + col * (cw + gap) - designScroll.value
+            if (x0 > tr + dp(6f) || x0 + cw < tl - dp(6f)) continue
+            val y0 = ct + row * rowH
+            val st = designOrder[j]
+            val id = 2000 + st
+            tmpR.set(x0, y0, x0 + cw, y0 + chh)
+            val s = itemScale(id)
+            c.save()
+            c.scale(s, s, tmpR.centerX(), tmpR.centerY())
+            // fondo de la tarjeta, como un fondo de pantalla en miniatura
+            chipFill.color = 0xFF17224D.toInt()
+            chipFill.alpha = (215 * a).toInt()
+            c.drawRoundRect(tmpR, dp(20f), dp(20f), chipFill)
+            tmpR2.set(tmpR.left + dp(6f), tmpR.top + dp(6f), tmpR.right - dp(6f), tmpR.bottom - dp(6f))
+            cardR.set(tmpR)
+            thumbClock(c, st, tmpR2, a)
+            glass.draw(c, cardR, dp(20f), a * 0.5f, false, S.SF_EDIT_BTN)
+            if (Prefs.clockStyle == st) {
+                ringPaint.color = OneColors.ACCENT
+                ringPaint.strokeWidth = dp(2.5f)
+                ringPaint.alpha = (255 * a).toInt()
+                c.drawRoundRect(cardR.left - dp(2f), cardR.top - dp(2f), cardR.right + dp(2f), cardR.bottom + dp(2f), dp(22f), dp(22f), ringPaint)
+                chipFill.color = OneColors.ACCENT
+                chipFill.alpha = (255 * a).toInt()
+                c.drawCircle(cardR.right - dp(12f), cardR.top + dp(12f), dp(9f), chipFill)
+                Glyphs.draw(c, Glyphs.CHECK, cardR.right - dp(12f), cardR.top + dp(12f), dp(13f), Color.WHITE, a)
+            }
+            sheetSmall.textAlign = Paint.Align.CENTER
+            sheetSmall.alpha = ((if (Prefs.clockStyle == st) 255 else 200) * a).toInt()
+            c.drawText(designNames[j], cardR.centerX(), cardR.bottom + dp(17f), sheetSmall)
+            c.restore()
+            hit(cardR, id)
+        }
+        c.restore()
+    }
+
+    private fun sectionTitle(c: Canvas, text: String, x: Float, y: Float, a: Float) {
+        sheetSmall.textAlign = Paint.Align.LEFT
+        sheetSmall.alpha = (175 * a).toInt()
+        c.drawText(text, x, y, sheetSmall)
+    }
+
+    private fun drawColorsTab(c: Canvas, tl: Float, tr: Float, ct: Float, a: Float) {
+        sectionTitle(c, "Color de la hora", tl + dp(4f), ct + dp(12f), a)
+        val y = colorRow(c, tl, tr, ct + dp(22f), 3000, S.i(S.tp(S.TX_CLOCK, S.TP_COLOR)), a)
+        sectionTitle(c, "Segundo tono · minutos y agujas", tl + dp(4f), y + dp(14f), a)
+        colorRow(c, tl, tr, y + dp(24f), 3100, S.i(S.tp(S.TX_MINUTES, S.TP_COLOR)), a)
+    }
+
+    private fun drawFormatTab(c: Canvas, tl: Float, tr: Float, ct: Float, a: Float) {
+        var y = pillRow(c, tl, tr, ct, fmtLabels, 0, 2, 4000, a)
+        y = pillRow(c, tl, tr, y, fmtLabels, 3, 5, 4000, a)
+        y = pillRow(c, tl, tr, y, fmtLabels, 6, 8, 4000, a)
+        val zi = S.i(S.CK_ZONE2).coerceIn(0, ClockFaces.ZONE_NAMES.size - 1)
+        val label = "Segunda ciudad: " + ClockFaces.ZONE_NAMES[zi]
+        val w = chipText.measureText(label) + dp(30f)
+        tmpR.set(tl, y, tl + w, y + dp(38f))
+        pill(c, tmpR, label, false, OneColors.ACCENT, a, 4009)
+    }
+
+    private fun drawPositionTab(c: Canvas, tl: Float, tr: Float, ct: Float, a: Float) {
+        sectionTitle(c, "Alineación", tl + dp(4f), ct + dp(12f), a)
+        var x = tl
+        val y = ct + dp(22f)
+        for (k in alignLabels.indices) {
+            val w = chipText.measureText(alignLabels[k]) + dp(30f)
+            tmpR.set(x, y, x + w, y + dp(38f))
+            val id = 5000 + alignValues[k]
+            pill(c, tmpR, alignLabels[k], fmtSelected(id), OneColors.ACCENT, a, id)
+            x += w + dp(8f)
+        }
+        // deslizador de tamaño
+        val sy = y + dp(80f)
+        sectionTitle(c, "Tamaño · " + (ckS.target * 100f).toInt() + " %", tl + dp(4f), sy - dp(18f), a)
+        sliderRect.set(tl + dp(12f), sy - dp(3f), tr - dp(12f), sy + dp(3f))
+        chipFill.color = Color.WHITE
+        chipFill.alpha = (60 * a).toInt()
+        c.drawRoundRect(sliderRect, dp(3f), dp(3f), chipFill)
+        val f = clamp01((ckS.value - 0.5f) / 1.5f)
+        val tx = lerp(sliderRect.left, sliderRect.right, f)
+        chipFill.color = OneColors.ACCENT
+        chipFill.alpha = (255 * a).toInt()
+        c.drawRoundRect(sliderRect.left, sliderRect.top, tx, sliderRect.bottom, dp(3f), dp(3f), chipFill)
+        chipFill.color = Color.WHITE
+        chipFill.alpha = (255 * a).toInt()
+        c.drawCircle(tx, sy, dp(11f) * (if (shMode == 2) 1.18f else 1f), chipFill)
+        tmpR.set(sliderRect.left - dp(12f), sy - dp(22f), sliderRect.right + dp(12f), sy + dp(22f))
+        hit(tmpR, 6001)
+        // restablecer
+        val label = "Restablecer posición y tamaño"
+        val w = chipText.measureText(label) + dp(30f)
+        tmpR.set(tl, sy + dp(32f), tl + w, sy + dp(70f))
+        pill(c, tmpR, label, false, OneColors.ACCENT, a, 6002)
+        sectionTitle(c, "Arrastra el reloj de arriba para moverlo · pellizca para el tamaño", tl + dp(4f), sy + dp(96f), a)
+    }
+
+    private fun setSlider(x: Float) {
+        val f = clamp01((x - sliderRect.left) / max(1f, sliderRect.width()))
+        Mo.tune(ckS, S.MO_EDIT_IN, 260f, 0.55f)
+        ckS.to(0.5f + 1.5f * f)
+        ticker.kick()
+    }
+
+    private fun setTab(t: Int) {
+        if (t == sheetTab) return
+        tabDir = if (t > sheetTab) 1f else -1f
+        sheetTab = t
+        Mo.tune(tabSp, S.MO_EDIT_IN, 420f, 0.6f)
+        tabSp.to(t.toFloat())
+        Mo.tune(tabFade, S.MO_EDIT_IN, 320f, 0.9f)
+        tabFade.snap(0f)
+        tabFade.to(1f)
     }
 
     private fun drawClockEditor(c: Canvas, ce: Float) {
@@ -1004,60 +1370,18 @@ class HomeView(ctx: Context) : View(ctx) {
         }
         // 3) el reloj, nítido encima
         drawClock(c, false)
-        if (clockBox.isEmpty) return
         // 4) tirador de tamaño en la esquina de la burbuja
         val hq = pop(clamp01((ce - 0.25f) / 0.6f))
         val hx = bubble.right
         val hy = bubble.bottom
         val hr = dp(19f) * hq
-        if (hr > 0.5f) {
+        if (!clockBox.isEmpty && hr > 0.5f) {
             capRect.set(hx - hr, hy - hr, hx + hr, hy + hr)
             glass.draw(c, capRect, hr, a, true, S.SF_EDIT_BTN)
             Glyphs.draw(c, Glyphs.RESIZE, hx, hy, dp(18f) * hq, Color.WHITE, a)
         }
-        // 5) ayuda
-        editLabel.alpha = (200 * a).toInt()
-        layoutChips()
-        c.drawText("Arrástralo · tira de la esquina para el tamaño", width / 2f, chipRects[0].top - dp(16f), editLabel)
-        // 6) burbujas-opción que aparecen una tras otra, infladas
-        for (i in chipRects.indices) {
-            val q = pop(clamp01((ce - 0.15f - i * 0.028f) / 0.45f))
-            if (q <= 0.01f) continue
-            val r = chipRects[i]
-            val pulse = if (i == pulseIdx) chipPulse.value else 1f
-            val s = q * pulse
-            val sel = chipSelected(i)
-            c.save()
-            c.scale(s, s, r.centerX(), r.centerY())
-            if (isDot(i)) {
-                // círculo de color (el primero, "A", es el automático)
-                val pal = chColors[i - 7]
-                val rad = r.width() / 2f
-                chipFill.color = if (pal == 0) Color.WHITE else S.PAL[pal]
-                chipFill.alpha = (235 * a).toInt()
-                c.drawCircle(r.centerX(), r.centerY(), rad - dp(3f), chipFill)
-                if (pal == 0) {
-                    chipText.color = 0xFF1B2440.toInt()
-                    chipText.alpha = (255 * a).toInt()
-                    c.drawText("A", r.centerX(), r.centerY() + dp(5f), chipText)
-                    chipText.color = Color.WHITE
-                }
-                ringPaint.color = Color.WHITE
-                ringPaint.strokeWidth = if (sel) dp(2.5f) else dp(1f)
-                ringPaint.alpha = ((if (sel) 255 else 110) * a).toInt()
-                c.drawCircle(r.centerX(), r.centerY(), if (sel) rad + dp(1.5f) else rad - dp(3f), ringPaint)
-            } else {
-                if (sel) {
-                    chipFill.color = if (i == 22) 0xFF2FC26B.toInt() else OneColors.ACCENT
-                    chipFill.alpha = (215 * a).toInt()
-                    c.drawRoundRect(r, r.height() / 2f, r.height() / 2f, chipFill)
-                }
-                glass.draw(c, r, r.height() / 2f, a * (if (sel) 0.55f else 1f), !sel, S.SF_EDIT_BTN)
-                chipText.alpha = (255 * a).toInt()
-                c.drawText(chipLabels[i], r.centerX(), r.centerY() + dp(5f), chipText)
-            }
-            c.restore()
-        }
+        // 5) el menú dock con todas las opciones del reloj
+        drawSheet(c, ce, a)
     }
 
     /** entra al editor; si viene de una pulsación larga, el mismo dedo ya puede arrastrar el reloj */
@@ -1079,6 +1403,11 @@ class HomeView(ctx: Context) : View(ctx) {
         ceLastY = downY
         ceStartX = ckX.target
         ceStartY = ckY.target
+        sheetPull.snap(0f)
+        tabSp.snap(sheetTab.toFloat())
+        tabFade.snap(1f)
+        shPress = -1
+        shMode = 0
         ticker.kick()
         invalidate()
     }
@@ -1114,62 +1443,131 @@ class HomeView(ctx: Context) : View(ctx) {
         ticker.kick()
     }
 
-    private fun chipAction(i: Int) {
-        pulseIdx = i
+    private fun sheetAction(id: Int) {
+        pulseIdx = id
         Mo.tune(chipPulse, S.MO_EDIT_IN, 520f, 0.3f)
-        chipPulse.snap(0.8f)
+        chipPulse.snap(0.82f)
         chipPulse.to(1f)
         Hx.fire(this, S.HE_SETTING)
         when {
-            i <= 6 -> {
-                val st = chStyles[i]
+            id == 6000 -> exitClockEdit()
+            id in 1000..1003 -> setTab(id - 1000)
+            id in 2000..2099 -> {
+                val st = id - 2000
                 if (Prefs.clockStyle != st) {
                     Prefs.clockStyle = st
                     relayout()
                     boing(4f)
                 }
             }
-            i <= 14 -> {
-                // el color se aplica a la hora, a las horas y a los minutos (el automático recupera los dos tonos)
-                val pal = chColors[i - 7].toFloat()
-                for (t in intArrayOf(S.TX_CLOCK, S.TX_HOURS, S.TX_MINUTES)) S.set(S.tp(t, S.TP_COLOR), pal)
+            id in 3000..3099 -> {
+                val pal = (id - 3000).toFloat()
+                S.set(S.tp(S.TX_CLOCK, S.TP_COLOR), pal)
+                S.set(S.tp(S.TX_HOURS, S.TP_COLOR), pal)
                 applyStyles()
                 boing(2.5f)
             }
-            i <= 17 -> {
-                S.set(S.CK_FORMAT, (i - 15).toFloat())
-                lastMinute = -1L
-                updateClock()
+            id in 3100..3199 -> {
+                S.set(S.tp(S.TX_MINUTES, S.TP_COLOR), (id - 3100).toFloat())
+                applyStyles()
                 boing(2.5f)
             }
-            i == 18 -> {
-                S.set(S.CK_ZERO, if (zeroOn()) 2f else 1f)
-                lastMinute = -1L
-                updateClock()
+            id in 4000..4002 -> setFmt { S.set(S.CK_FORMAT, (id - 4000).toFloat()) }
+            id == 4003 -> setFmt { S.set(S.CK_ZERO, if (zeroOn()) 2f else 1f) }
+            id == 4004 -> setFmt { S.set(S.CK_SEPCH, if (S.i(S.CK_SEPCH) == 1) 0f else 1f) }
+            id == 4005 -> setFmt { S.set(S.CK_AMPM, if (S.b(S.CK_AMPM)) 0f else 1f) }
+            id == 4006 -> setFmt { S.set(S.DT_SHOW, if (S.b(S.DT_SHOW)) 0f else 1f) }
+            id == 4007 -> {
+                S.set(S.DT_GREETING, if (S.b(S.DT_GREETING)) 0f else 1f)
+                relayout()
                 boing(2.5f)
             }
-            i == 19 -> {
-                S.set(S.CK_SEPCH, if (S.i(S.CK_SEPCH) == 1) 0f else 1f)
-                lastMinute = -1L
-                updateClock()
-                boing(2.5f)
+            id == 4008 -> setFmt { S.set(S.DT_PILL, if (S.b(S.DT_PILL)) 0f else 1f) }
+            id == 4009 -> setFmt { S.set(S.CK_ZONE2, ((S.i(S.CK_ZONE2) + 1) % ClockFaces.ZONES.size).toFloat()) }
+            id in 5000..5002 -> {
+                S.set(S.CK_ALIGN, (id - 5000).toFloat())
+                boing(3f)
             }
-            i == 20 -> {
-                S.set(S.DT_SHOW, if (S.b(S.DT_SHOW)) 0f else 1f)
-                datePillW = 0f
-                boing(2.5f)
-            }
-            i == 21 -> {
+            id == 6002 -> {
                 ckX.to(0f)
                 ckY.to(0f)
                 ckS.to(1f)
                 saveClock()
                 boing(3f)
             }
-            else -> exitClockEdit()
         }
         ticker.kick()
         invalidate()
+    }
+
+    /** cambia un formato y vuelve a calcular la hora (con su animación de cambio) */
+    private inline fun setFmt(change: () -> Unit) {
+        change()
+        lastMinute = -1L
+        datePillW = 0f
+        updateClock()
+        boing(2.5f)
+    }
+
+    private fun sheetDown(ev: MotionEvent, x: Float, y: Float) {
+        shVt?.recycle()
+        shVt = VelocityTracker.obtain()
+        shVt?.addMovement(ev)
+        shMode = 0
+        shPress = hitAt(x, y)
+        shWasMoving = designScroll.isMoving
+        designScroll.stop()
+        if (shPress == 6001) {
+            shMode = 2
+            setSlider(x)
+        }
+    }
+
+    private fun sheetMove(ev: MotionEvent, x: Float, y: Float) {
+        shVt?.addMovement(ev)
+        val dx = x - ceDownX
+        val dy = y - ceDownY
+        if (shMode == 0 && hypot(dx, dy) > slop) {
+            shMode = when {
+                sheetTab == 0 && abs(dx) > abs(dy) -> 1
+                dy > 0f && abs(dy) > abs(dx) -> 3
+                else -> 4
+            }
+            shPress = -1
+        }
+        when (shMode) {
+            1 -> designScroll.drag(-(x - ceLastX))
+            2 -> setSlider(x)
+            3 -> sheetPull.snap(max(0f, dy))
+        }
+    }
+
+    private fun sheetUp(ev: MotionEvent, up: Boolean, x: Float, y: Float) {
+        shVt?.addMovement(ev)
+        shVt?.computeCurrentVelocity(1000)
+        val vx = shVt?.xVelocity ?: 0f
+        val vy = shVt?.yVelocity ?: 0f
+        when (shMode) {
+            1 -> designScroll.release(-vx)
+            2 -> {
+                saveClock()
+                boing(2f)
+            }
+            3 -> {
+                Mo.tune(sheetPull, S.MO_EDIT_OUT, 360f, 0.7f)
+                if (up && (sheetPull.value > dp(90f) || vy > 1500f)) exitClockEdit()
+                sheetPull.to(0f)
+            }
+            0 -> if (up && !shWasMoving) {
+                val id = hitAt(x, y)
+                if (id >= 0 && id == shPress) sheetAction(id)
+            }
+        }
+        shPress = -1
+        shMode = 0
+        shVt?.recycle()
+        shVt = null
+        ticker.kick()
     }
 
     private fun clockEditTouch(ev: MotionEvent): Boolean {
@@ -1183,12 +1581,12 @@ class HomeView(ctx: Context) : View(ctx) {
                 ceLastX = x
                 ceLastY = y
                 ceMoved = false
-                ceChip = -1
                 ceMode = 0
-                layoutChips()
-                for (i in chipRects.indices) if (chipRects[i].contains(x, y)) {
-                    ceMode = 4
-                    ceChip = i
+                if (clockEd.value > 0.5f && sheetRect.contains(x, y)) {
+                    ceMode = 5
+                    sheetDown(ev, x, y)
+                    ticker.kick()
+                    return true
                 }
                 if (ceMode == 0 && hypot(x - bubble.right, y - bubble.bottom) < dp(32f)) {
                     ceMode = 2
@@ -1206,7 +1604,7 @@ class HomeView(ctx: Context) : View(ctx) {
                 return true
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
-                if (ev.pointerCount == 2) {
+                if (ev.pointerCount == 2 && ceMode != 5) {
                     ceMode = 3
                     ceStartS = ckS.target
                     ceStartD = hypot(ev.getX(0) - ev.getX(1), ev.getY(0) - ev.getY(1)).coerceAtLeast(dp(20f))
@@ -1215,6 +1613,13 @@ class HomeView(ctx: Context) : View(ctx) {
             }
             MotionEvent.ACTION_MOVE -> {
                 if (hypot(x - ceDownX, y - ceDownY) > slop) ceMoved = true
+                if (ceMode == 5) {
+                    sheetMove(ev, x, y)
+                    ceLastX = x
+                    ceLastY = y
+                    ticker.kick()
+                    return true
+                }
                 when (ceMode) {
                     1 -> {
                         Mo.tune(ckX, S.MO_EDIT_IN, 260f, 0.55f)
@@ -1254,7 +1659,7 @@ class HomeView(ctx: Context) : View(ctx) {
                         boing(if (ceMoved) 3.5f else 1.5f)
                         if (ceMoved) Hx.fire(this, S.HE_SETTING)
                     }
-                    4 -> if (up && ceChip >= 0 && chipRects[ceChip].contains(x, y)) chipAction(ceChip)
+                    5 -> sheetUp(ev, up, x, y)
                     else -> if (up && !ceMoved) exitClockEdit()
                 }
                 ceMode = 0
@@ -1366,7 +1771,10 @@ class HomeView(ctx: Context) : View(ctx) {
     }
 
     private fun clockPivotY(): Float =
-        insetTop + when (Prefs.clockStyle) { 1 -> dp(130f); 3 -> dp(160f); 4 -> dp(124f); 6 -> dp(52f); else -> dp(80f) } +
+        insetTop + when (Prefs.clockStyle) {
+            1 -> dp(130f); 3 -> dp(160f); 4 -> dp(124f); 6 -> dp(52f)
+            else -> if (Prefs.clockStyle >= 8) dp(ClockFaces.pivotDp(Prefs.clockStyle)) else dp(80f)
+        } +
             dp(ckY.value) + (if (S.b(S.DT_GREETING)) dp(22f) else 0f)
 
     /** pasa un rectángulo del reloj "sin transformar" a su posición real en pantalla */
@@ -1412,21 +1820,29 @@ class HomeView(ctx: Context) : View(ctx) {
         updateClock()
         clockRect.setEmpty()
         dateRect.setEmpty()
-        if (Prefs.clockStyle == 2) return
-        dy += dp(ckY.value)
-        val align = S.i(S.CK_ALIGN)
+        val st = if (styleOverride >= 0) styleOverride else Prefs.clockStyle
+        if (st == 2) return
+        if (!thumb) dy += dp(ckY.value)
+        val align = if (thumb) 0 else S.i(S.CK_ALIGN)
         val w = width.toFloat()
-        val greet = S.b(S.DT_GREETING)
+        val greet = !thumb && S.b(S.DT_GREETING)
         val gOff = if (greet) dp(22f) else 0f
         val al = when (align) { 1 -> Paint.Align.LEFT; 2 -> Paint.Align.RIGHT; else -> Paint.Align.CENTER }
-        when (Prefs.clockStyle) {
+        when (st) {
             3 -> { drawBigClock(c, a, dy, gOff, greet, al); return }
             4 -> { drawAnalogClock(c, a, dy, gOff, greet, al); return }
             5 -> { drawThinClock(c, a, dy, gOff, greet, al); return }
             6 -> { drawPillClock(c, a, dy, gOff, greet, al); return }
             7 -> { drawNeonClock(c, a, dy, gOff, greet, al); return }
+            else -> if (st >= 8) {
+                drawGreeting(c, alignX(al, dp(28f)), al, a, dy, greet)
+                info.q = clockSp.value
+                faces.draw(c, st, info, a, alignX(al, dp(28f)), insetTop + gOff + dy, al, w, S.b(S.DT_SHOW),
+                    isClockEditing, clockRect, dateRect)
+                return
+            }
         }
-        if (Prefs.clockStyle == 1) {
+        if (st == 1) {
             // Reloj apilado de One UI: horas sobre minutos
             val x = when (align) { 0 -> dp(26f); 2 -> w - dp(26f); else -> dp(26f) }
             val sal = if (align == 2) Paint.Align.RIGHT else Paint.Align.LEFT

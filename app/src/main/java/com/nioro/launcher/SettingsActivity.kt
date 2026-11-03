@@ -60,7 +60,11 @@ class SettingsActivity : Activity() {
             "Los iconos caen como esferas con física real"
         )
         // el número de cada diseño es su posición: 2 = sin reloj; los nuevos van al final
-        val CLOCK = arrayOf("Nioro", "Apilado", "Sin reloj", "Grande", "Analógico", "Fino", "Cápsula", "Neón")
+        val CLOCK = arrayOf(
+            "Nioro", "Apilado", "Sin reloj", "Grande", "Analógico", "Fino", "Cápsula", "Neón", "Contorno", "Retro",
+            "Minimal", "Anillo", "Palabras", "Lateral", "Burbujas", "Degradado", "Calendario", "Doble zona", "Puntos",
+            "Segmentos", "Arco del día"
+        )
         val THEMES = arrayOf("Liquid Glass", "One UI", "Minimal", "Neón", "Oscuro total", "Cristal claro", "Juguetón", "Rendimiento")
         val THEME_COLORS = intArrayOf(
             0xFF3E91FF.toInt(), 0xFF2F7BFF.toInt(), 0xFF64748B.toInt(), 0xFFD946EF.toInt(),

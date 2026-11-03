@@ -33,6 +33,8 @@ El usuario quiere que **las actualizaciones le lleguen solas**. El flujo:
 - `Motion.kt` — matemáticas de los 5 estilos (abrir, volver, página, dock). Las usa también `PreviewView`.
 - `Glass.kt` — pintor de cristal, desenfoque, sombra de iconos. `Fx.kt` — textos (`Tx`), iconos (`IconFx`), vibración (`Hx`).
 - `HomeView.kt` — inicio: páginas, dock con magnificación, reloj, modo edición, arrastrar, gestos.
+- `ClockFaces.kt` — diseños de reloj 8-20 (los 0-7 están en `HomeView`). Mantener pulsado el reloj abre su
+  menú dock (`drawSheet`): pestañas Diseños (miniaturas en vivo), Colores, Formato y Posición.
 - `AppsView.kt` + `LaunchpadView`, `FanView`, `GridPopupView`, `ListAppsView`, `GravityView` — las 5 vistas de apps; `DrawerHost.kt` las aloja.
 - `RecentsView.kt`, `Overlays.kt` (menú, animación de abrir, fondo difuminado), `AppRepo.kt` (apps, iconos, recientes).
 - `SettingsActivity.kt`, `Ui.kt`, `PreviewView.kt` — pantalla de Ajustes. `Updater.kt` — actualizador. `Compat.kt` — Android 10–14.
