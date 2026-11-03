@@ -91,6 +91,11 @@ class HomeView(ctx: Context) : View(ctx) {
     /** cambio de minuto: el número viejo sube y se va, el nuevo entra desde abajo */
     private val clockSp = SpringValue(1f, 160f, 22f, 0.002f)
     private var prevTime = ""
+    /** hora y minuto actuales (para el reloj analógico, cuyas agujas giran al cambiar) */
+    private var curHour24 = 0
+    private var curMinute = 0
+    private var prevHour24 = -1
+    private var prevMinute = -1
     private var prevHour = ""
     private var prevMin = ""
     /** los puntos de página se iluminan mientras se desliza */
@@ -125,11 +130,40 @@ class HomeView(ctx: Context) : View(ctx) {
     private var pulseIdx = -1
     private val bubble = RectF()
     private val clockBox = RectF()
-    private val chipRects = Array(8) { RectF() }
-    private val chipLabels = arrayOf("Nioro", "Apilado", "Sistema", "12 h", "24 h", "Fecha", "Restablecer", "Listo")
+    /**
+     * Burbujas del editor: 0-6 diseños, 7-14 colores (círculos), 15-19 formatos,
+     * 20 Fecha, 21 Restablecer, 22 Listo.
+     */
+    private val chipRects = Array(23) { RectF() }
+    private val chipLabels = arrayOf(
+        "Nioro", "Apilado", "Grande", "Analógico", "Fino", "Cápsula", "Neón",
+        "", "", "", "", "", "", "", "",
+        "Sistema", "12 h", "24 h", "Cero inicial", "12·30",
+        "Fecha", "Restablecer", "Listo"
+    )
+    /** valor de Prefs.clockStyle de cada burbuja de diseño (2 = sin reloj no se ofrece aquí) */
+    private val chStyles = intArrayOf(0, 1, 3, 4, 5, 6, 7)
+    /** colores de la paleta (S.PAL): automático, cian, azul, rosa, amarillo, verde, naranja, morado */
+    private val chColors = intArrayOf(0, 4, 3, 11, 8, 6, 9, 13)
+    private val chipGroups = arrayOf(0..6, 7..14, 15..19, 20..22)
+    private var chipsKey = -1f
+    private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
     private val chipText = TextPaint(Paint.ANTI_ALIAS_FLAG)
     private val chipFill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val scrimPaint = Paint()
+    // ---- pinturas de los diseños de reloj
+    private val bigH = TextPaint(Paint.ANTI_ALIAS_FLAG)
+    private val bigM = TextPaint(Paint.ANTI_ALIAS_FLAG)
+    private val thinPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
+    private val thinSmall = TextPaint(Paint.ANTI_ALIAS_FLAG)
+    private val pillTime = TextPaint(Paint.ANTI_ALIAS_FLAG)
+    private val neonPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
+    private val neonDate = TextPaint(Paint.ANTI_ALIAS_FLAG)
+    private val tickPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+    private val handPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND }
+    private val centerPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val sepPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
+    private val dialRect = RectF()
     private var hourStr = ""
     private var minStr = ""
     private val stackPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
@@ -303,7 +337,7 @@ class HomeView(ctx: Context) : View(ctx) {
         ckY.snap(S.f(S.CK_DY))
         ckS.snap(S.p(S.CK_SCALE))
         chipText.color = Color.WHITE
-        chipText.textSize = dp(14.5f)
+        chipText.textSize = dp(13.5f)
         chipText.textAlign = Paint.Align.CENTER
         chipText.typeface = Typeface.create(Typeface.DEFAULT, 500, false)
         stackPaint.color = Color.WHITE
@@ -484,6 +518,9 @@ class HomeView(ctx: Context) : View(ctx) {
         gridTop = insetTop + when (Prefs.clockStyle) {
             1 -> dp(232f)
             2 -> dp(28f)
+            3 -> dp(296f)
+            4 -> dp(262f)
+            6 -> dp(112f)
             else -> dp(146f)
         } + dp(S.f(S.H_TOP)) + (if (S.b(S.DT_GREETING) && Prefs.clockStyle != 2) dp(22f) else 0f)
         val avail = dotsY - dp(16f) - gridTop - dp(S.f(S.H_BOTTOM))
@@ -516,6 +553,20 @@ class HomeView(ctx: Context) : View(ctx) {
         Tx.apply(minPaint, S.TX_MINUTES, dp(96f), 300, dp(10f), 0x55, -0.03f)
         Tx.apply(editLabel, S.TX_EDIT, dp(12.5f), 500, dp(3f), 0x88)
         Tx.apply(greetPaint, S.TX_GREETING, dp(17f), 500, dp(6f), 0x66)
+        // diseños nuevos: Grande (dos tonos), Fino, Cápsula y Neón
+        Tx.apply(bigH, S.TX_HOURS, dp(118f), 400, dp(10f), 0x55, -0.04f)
+        Tx.apply(bigM, S.TX_MINUTES, dp(118f), 400, dp(10f), 0x55, -0.04f)
+        if (S.i(S.tp(S.TX_MINUTES, S.TP_COLOR)) == 0) bigM.color = blend(bigH.color, OneColors.ACCENT, 0.55f)
+        Tx.apply(thinPaint, S.TX_CLOCK, dp(92f), 100, dp(8f), 0x55, -0.01f)
+        Tx.apply(thinSmall, S.TX_DATE, dp(13f), 600, dp(4f), 0x55, 0.16f)
+        Tx.apply(pillTime, S.TX_CLOCK, dp(40f), 500, 0f, 0)
+        Tx.apply(neonPaint, S.TX_CLOCK, dp(80f), 300, 0f, 0, -0.01f)
+        Tx.apply(neonDate, S.TX_DATE, dp(15f), 500, 0f, 0)
+        val neon = if (S.i(S.tp(S.TX_CLOCK, S.TP_COLOR)) == 0) 0xFF7CF5FF.toInt() else neonPaint.color
+        neonPaint.color = neon
+        neonDate.color = neon
+        neonPaint.setShadowLayer(dp(16f), 0f, 0f, (neon and 0x00FFFFFF) or (0xDD shl 24))
+        neonDate.setShadowLayer(dp(8f), 0f, 0f, (neon and 0x00FFFFFF) or (0xBB shl 24))
         datePillW = 0f
         lastMinute = -1L
         labelCache.clear()
@@ -677,14 +728,23 @@ class HomeView(ctx: Context) : View(ctx) {
             2 -> true
             else -> DateFormat.is24HourFormat(context)
         }
-        val tp = if (is24) "HH:mm" else if (S.b(S.CK_AMPM)) "h:mm a" else "h:mm"
+        // cero a la izquierda: automático = 24 h con cero (09:05), 12 h sin cero (9:05)
+        val zero = when (S.i(S.CK_ZERO)) { 1 -> true; 2 -> false; else -> is24 }
+        val hp = if (is24) (if (zero) "HH" else "H") else (if (zero) "hh" else "h")
+        val tp = hp + ":mm" + (if (!is24 && S.b(S.CK_AMPM)) " a" else "")
+        val cal = java.util.Calendar.getInstance()
+        prevHour24 = curHour24
+        prevMinute = curMinute
+        curHour24 = cal.get(java.util.Calendar.HOUR_OF_DAY)
+        curMinute = cal.get(java.util.Calendar.MINUTE)
         val oldTime = timeStr
         val oldHour = hourStr
         val oldMin = minStr
         timeStr = SimpleDateFormat(tp, loc).format(d)
         if (!S.b(S.CK_BLINK)) timeStr = timeStr.replace(':', ' ')
+        else if (S.i(S.CK_SEPCH) == 1) timeStr = timeStr.replace(':', '·')
         timeStr = Tx.str(S.TX_CLOCK, timeStr)
-        hourStr = SimpleDateFormat(if (is24) "HH" else "hh", loc).format(d)
+        hourStr = SimpleDateFormat(if (is24) (if (zero) "HH" else "H") else (if (zero) "hh" else "h"), loc).format(d)
         minStr = SimpleDateFormat("mm", loc).format(d)
         if (oldTime.isNotEmpty() && oldTime != timeStr) {
             prevTime = oldTime
@@ -868,35 +928,61 @@ class HomeView(ctx: Context) : View(ctx) {
         return 1f + 2.7f * t * t * t + 1.7f * t * t
     }
 
-    private fun chipSelected(i: Int): Boolean = when (i) {
-        0 -> Prefs.clockStyle == 0
-        1 -> Prefs.clockStyle == 1
-        2, 3, 4 -> S.i(S.CK_FORMAT) == i - 2
-        5 -> S.b(S.DT_SHOW)
-        7 -> true
+    private fun is24(): Boolean = when (S.i(S.CK_FORMAT)) {
+        1 -> false
+        2 -> true
+        else -> DateFormat.is24HourFormat(context)
+    }
+
+    private fun zeroOn(): Boolean = when (S.i(S.CK_ZERO)) { 1 -> true; 2 -> false; else -> is24() }
+
+    private fun isDot(i: Int): Boolean = i in 7..14
+
+    private fun chipSelected(i: Int): Boolean = when {
+        i <= 6 -> Prefs.clockStyle == chStyles[i]
+        i <= 14 -> S.i(S.tp(S.TX_CLOCK, S.TP_COLOR)) == chColors[i - 7]
+        i <= 17 -> S.i(S.CK_FORMAT) == i - 15
+        i == 18 -> zeroOn()
+        i == 19 -> S.i(S.CK_SEPCH) == 1
+        i == 20 -> S.b(S.DT_SHOW)
+        i == 22 -> true
         else -> false
     }
 
-    /** coloca las 8 burbujas-opción en 3 filas sobre el dock */
-    private val chipRows = arrayOf(intArrayOf(0, 1), intArrayOf(2, 3, 4), intArrayOf(5, 6, 7))
+    private fun chipW(i: Int): Float = if (isDot(i)) dp(34f) else chipText.measureText(chipLabels[i]) + dp(28f)
 
+    /** coloca las burbujas en filas que se ajustan solas al ancho, justo encima del dock (se calcula una vez) */
     private fun layoutChips() {
-        val rowsIdx = chipRows
-        val h = dp(42f)
-        val gap = dp(10f)
-        var y = (if (S.b(S.K_SHOW)) dockTopY() else height - insetBottom - dp(20f)) - dp(24f) - 3 * h - 2 * dp(12f)
-        for (row in rowsIdx) {
-            var total = 0f
-            for (i in row) total += chipText.measureText(chipLabels[i]) + dp(36f)
-            total += gap * (row.size - 1)
-            var x = (width - total) / 2f
-            for (i in row) {
-                val cw = chipText.measureText(chipLabels[i]) + dp(36f)
-                chipRects[i].set(x, y, x + cw, y + h)
-                x += cw + gap
+        val bottom = (if (S.b(S.K_SHOW)) dockTopY() else height - insetBottom - dp(20f)) - dp(18f)
+        val key = width * 100000f + bottom
+        if (key == chipsKey) return
+        chipsKey = key
+        val maxW = width - dp(24f)
+        val gap = dp(8f)
+        val h = dp(38f)
+        var y = 0f
+        for (g in chipGroups) {
+            var i = g.first
+            while (i <= g.last) {
+                var rowW = chipW(i)
+                var j = i + 1
+                while (j <= g.last && rowW + gap + chipW(j) <= maxW) {
+                    rowW += gap + chipW(j)
+                    j++
+                }
+                var x = (width - rowW) / 2f
+                for (k in i until j) {
+                    val cw = chipW(k)
+                    val ch = if (isDot(k)) dp(34f) else h
+                    chipRects[k].set(x, y + (h - ch) / 2f, x + cw, y + (h + ch) / 2f)
+                    x += cw + gap
+                }
+                y += h + dp(9f)
+                i = j
             }
-            y += h + dp(12f)
         }
+        val top = bottom - (y - dp(9f))
+        for (r in chipRects) r.offset(0f, top)
     }
 
     private fun drawClockEditor(c: Canvas, ce: Float) {
@@ -934,23 +1020,42 @@ class HomeView(ctx: Context) : View(ctx) {
         layoutChips()
         c.drawText("Arrástralo · tira de la esquina para el tamaño", width / 2f, chipRects[0].top - dp(16f), editLabel)
         // 6) burbujas-opción que aparecen una tras otra, infladas
-        for (i in chipLabels.indices) {
-            val q = pop(clamp01((ce - 0.2f - i * 0.055f) / 0.45f))
+        for (i in chipRects.indices) {
+            val q = pop(clamp01((ce - 0.15f - i * 0.028f) / 0.45f))
             if (q <= 0.01f) continue
             val r = chipRects[i]
             val pulse = if (i == pulseIdx) chipPulse.value else 1f
             val s = q * pulse
+            val sel = chipSelected(i)
             c.save()
             c.scale(s, s, r.centerX(), r.centerY())
-            val sel = chipSelected(i)
-            if (sel) {
-                chipFill.color = if (i == 7) 0xFF2FC26B.toInt() else OneColors.ACCENT
-                chipFill.alpha = (215 * a).toInt()
-                c.drawRoundRect(r, r.height() / 2f, r.height() / 2f, chipFill)
+            if (isDot(i)) {
+                // círculo de color (el primero, "A", es el automático)
+                val pal = chColors[i - 7]
+                val rad = r.width() / 2f
+                chipFill.color = if (pal == 0) Color.WHITE else S.PAL[pal]
+                chipFill.alpha = (235 * a).toInt()
+                c.drawCircle(r.centerX(), r.centerY(), rad - dp(3f), chipFill)
+                if (pal == 0) {
+                    chipText.color = 0xFF1B2440.toInt()
+                    chipText.alpha = (255 * a).toInt()
+                    c.drawText("A", r.centerX(), r.centerY() + dp(5f), chipText)
+                    chipText.color = Color.WHITE
+                }
+                ringPaint.color = Color.WHITE
+                ringPaint.strokeWidth = if (sel) dp(2.5f) else dp(1f)
+                ringPaint.alpha = ((if (sel) 255 else 110) * a).toInt()
+                c.drawCircle(r.centerX(), r.centerY(), if (sel) rad + dp(1.5f) else rad - dp(3f), ringPaint)
+            } else {
+                if (sel) {
+                    chipFill.color = if (i == 22) 0xFF2FC26B.toInt() else OneColors.ACCENT
+                    chipFill.alpha = (215 * a).toInt()
+                    c.drawRoundRect(r, r.height() / 2f, r.height() / 2f, chipFill)
+                }
+                glass.draw(c, r, r.height() / 2f, a * (if (sel) 0.55f else 1f), !sel, S.SF_EDIT_BTN)
+                chipText.alpha = (255 * a).toInt()
+                c.drawText(chipLabels[i], r.centerX(), r.centerY() + dp(5f), chipText)
             }
-            glass.draw(c, r, r.height() / 2f, a * (if (sel) 0.55f else 1f), !sel, S.SF_EDIT_BTN)
-            chipText.alpha = (255 * a).toInt()
-            c.drawText(chipLabels[i], r.centerX(), r.centerY() + dp(5f), chipText)
             c.restore()
         }
     }
@@ -1015,31 +1120,53 @@ class HomeView(ctx: Context) : View(ctx) {
         chipPulse.snap(0.8f)
         chipPulse.to(1f)
         Hx.fire(this, S.HE_SETTING)
-        when (i) {
-            0, 1 -> if (Prefs.clockStyle != i) {
-                Prefs.clockStyle = i
-                relayout()
-                boing(4f)
+        when {
+            i <= 6 -> {
+                val st = chStyles[i]
+                if (Prefs.clockStyle != st) {
+                    Prefs.clockStyle = st
+                    relayout()
+                    boing(4f)
+                }
             }
-            2, 3, 4 -> {
-                S.set(S.CK_FORMAT, (i - 2).toFloat())
+            i <= 14 -> {
+                // el color se aplica a la hora, a las horas y a los minutos (el automático recupera los dos tonos)
+                val pal = chColors[i - 7].toFloat()
+                for (t in intArrayOf(S.TX_CLOCK, S.TX_HOURS, S.TX_MINUTES)) S.set(S.tp(t, S.TP_COLOR), pal)
+                applyStyles()
+                boing(2.5f)
+            }
+            i <= 17 -> {
+                S.set(S.CK_FORMAT, (i - 15).toFloat())
                 lastMinute = -1L
                 updateClock()
                 boing(2.5f)
             }
-            5 -> {
+            i == 18 -> {
+                S.set(S.CK_ZERO, if (zeroOn()) 2f else 1f)
+                lastMinute = -1L
+                updateClock()
+                boing(2.5f)
+            }
+            i == 19 -> {
+                S.set(S.CK_SEPCH, if (S.i(S.CK_SEPCH) == 1) 0f else 1f)
+                lastMinute = -1L
+                updateClock()
+                boing(2.5f)
+            }
+            i == 20 -> {
                 S.set(S.DT_SHOW, if (S.b(S.DT_SHOW)) 0f else 1f)
                 datePillW = 0f
                 boing(2.5f)
             }
-            6 -> {
+            i == 21 -> {
                 ckX.to(0f)
                 ckY.to(0f)
                 ckS.to(1f)
                 saveClock()
                 boing(3f)
             }
-            7 -> exitClockEdit()
+            else -> exitClockEdit()
         }
         ticker.kick()
         invalidate()
@@ -1239,7 +1366,8 @@ class HomeView(ctx: Context) : View(ctx) {
     }
 
     private fun clockPivotY(): Float =
-        insetTop + (if (Prefs.clockStyle == 1) dp(130f) else dp(80f)) + dp(ckY.value) + (if (S.b(S.DT_GREETING)) dp(22f) else 0f)
+        insetTop + when (Prefs.clockStyle) { 1 -> dp(130f); 3 -> dp(160f); 4 -> dp(124f); 6 -> dp(52f); else -> dp(80f) } +
+            dp(ckY.value) + (if (S.b(S.DT_GREETING)) dp(22f) else 0f)
 
     /** pasa un rectángulo del reloj "sin transformar" a su posición real en pantalla */
     private fun mapClock(r: RectF, px: Float, py: Float, sx: Float, sy: Float, tx: Float) {
@@ -1291,6 +1419,13 @@ class HomeView(ctx: Context) : View(ctx) {
         val greet = S.b(S.DT_GREETING)
         val gOff = if (greet) dp(22f) else 0f
         val al = when (align) { 1 -> Paint.Align.LEFT; 2 -> Paint.Align.RIGHT; else -> Paint.Align.CENTER }
+        when (Prefs.clockStyle) {
+            3 -> { drawBigClock(c, a, dy, gOff, greet, al); return }
+            4 -> { drawAnalogClock(c, a, dy, gOff, greet, al); return }
+            5 -> { drawThinClock(c, a, dy, gOff, greet, al); return }
+            6 -> { drawPillClock(c, a, dy, gOff, greet, al); return }
+            7 -> { drawNeonClock(c, a, dy, gOff, greet, al); return }
+        }
         if (Prefs.clockStyle == 1) {
             // Reloj apilado de One UI: horas sobre minutos
             val x = when (align) { 0 -> dp(26f); 2 -> w - dp(26f); else -> dp(26f) }
@@ -1342,6 +1477,182 @@ class HomeView(ctx: Context) : View(ctx) {
         val tx = when (al) { Paint.Align.LEFT -> pl + dp(15f); Paint.Align.RIGHT -> pl + datePillW - dp(15f); else -> cx }
         c.drawText(dateStr, tx, py + dp(20.5f) + Tx.dy(S.TX_DATE), datePaint)
         datePaint.textAlign = Paint.Align.CENTER
+    }
+
+    // ---------------------------------------------------------------- Diseños de reloj
+    private fun alignX(al: Paint.Align, margin: Float): Float = when (al) {
+        Paint.Align.LEFT -> margin
+        Paint.Align.RIGHT -> width - margin
+        else -> width / 2f
+    }
+
+    private fun drawGreeting(c: Canvas, x: Float, al: Paint.Align, a: Float, dy: Float, greet: Boolean) {
+        if (!greet) return
+        greetPaint.textAlign = al
+        greetPaint.alpha = Tx.alpha(S.TX_GREETING, a)
+        c.drawText(greetStr, x, insetTop + dp(26f) + dy + Tx.dy(S.TX_GREETING), greetPaint)
+    }
+
+    /** izquierda del texto [tw] según la alineación */
+    private fun leftOf(x: Float, tw: Float, al: Paint.Align): Float = when (al) {
+        Paint.Align.LEFT -> x
+        Paint.Align.RIGHT -> x - tw
+        else -> x - tw / 2f
+    }
+
+    private fun drawDateLine(c: Canvas, p: Paint, text: String, x: Float, y: Float, al: Paint.Align, alpha: Int) {
+        p.textAlign = al
+        p.alpha = alpha
+        c.drawText(text, x, y, p)
+        val tw = p.measureText(text)
+        val l = leftOf(x, tw, al)
+        dateRect.set(l, y - dp(20f), l + tw, y + dp(8f))
+    }
+
+    /** Grande: horas y minutos enormes en dos líneas, cada uno de un tono */
+    private fun drawBigClock(c: Canvas, a: Float, dy: Float, gOff: Float, greet: Boolean, al: Paint.Align) {
+        val x = alignX(al, dp(28f))
+        drawGreeting(c, x, al, a, dy, greet)
+        val y1 = insetTop + dp(126f) + gOff + dy + Tx.dy(S.TX_HOURS)
+        val y2 = y1 + bigH.textSize * 0.9f + Tx.dy(S.TX_MINUTES)
+        bigH.textAlign = al
+        bigM.textAlign = al
+        rollText(c, bigH, hourStr, prevHour, x, y1, Tx.alpha(S.TX_HOURS, a))
+        rollText(c, bigM, minStr, prevMin, x, y2, Tx.alpha(S.TX_MINUTES, a))
+        val tw = maxOf(bigH.measureText(hourStr), bigM.measureText(minStr))
+        val l = leftOf(x, tw, al)
+        clockRect.set(l, y1 - bigH.textSize * 0.75f, l + tw, y2 + dp(6f))
+        if (S.b(S.DT_SHOW)) drawDateLine(c, datePaint, dateStr, x, y2 + dp(40f) + Tx.dy(S.TX_DATE), al, Tx.alpha(S.TX_DATE, a))
+    }
+
+    /** Analógico: esfera de cristal con marcas y agujas que giran con un resorte al cambiar el minuto */
+    private fun drawAnalogClock(c: Canvas, a: Float, dy: Float, gOff: Float, greet: Boolean, al: Paint.Align) {
+        val r = dp(84f) * S.p(S.tp(S.TX_CLOCK, S.TP_SIZE))
+        val cx = when (al) { Paint.Align.LEFT -> dp(28f) + r; Paint.Align.RIGHT -> width - dp(28f) - r; else -> width / 2f }
+        drawGreeting(c, alignX(al, dp(28f)), al, a, dy, greet)
+        val cy = insetTop + dp(40f) + r + gOff + dy
+        dialRect.set(cx - r, cy - r, cx + r, cy + r)
+        glass.draw(c, dialRect, r, a * 0.9f, true, S.SF_DATE)
+        val base = clockPaint.color
+        tickPaint.color = base
+        for (i in 0 until 12) {
+            val big = i % 3 == 0
+            tickPaint.strokeWidth = if (big) dp(3f) else dp(1.6f)
+            tickPaint.alpha = ((if (big) 230 else 150) * a).toInt()
+            val ang = Math.toRadians(i * 30.0)
+            val s = kotlin.math.sin(ang).toFloat()
+            val co = kotlin.math.cos(ang).toFloat()
+            val r1 = r - dp(10f)
+            val r0 = r1 - (if (big) dp(10f) else dp(5f))
+            c.drawLine(cx + s * r0, cy - co * r0, cx + s * r1, cy - co * r1, tickPaint)
+        }
+        // las agujas pasan del minuto anterior al nuevo con el mismo resorte del cambio de minuto
+        val q = clockSp.value
+        var minA = curMinute * 6f
+        var hourA = ((curHour24 % 12) + curMinute / 60f) * 30f
+        if (q < 0.999f && prevMinute >= 0) {
+            var pm = prevMinute * 6f
+            if (minA < pm) pm -= 360f
+            var ph = ((prevHour24.coerceAtLeast(0) % 12) + prevMinute / 60f) * 30f
+            if (hourA < ph) ph -= 360f
+            minA = lerp(pm, minA, q)
+            hourA = lerp(ph, hourA, q)
+        }
+        fun hand(deg: Float, len: Float, wdt: Float, col: Int) {
+            val ang = Math.toRadians(deg.toDouble())
+            handPaint.strokeWidth = wdt
+            handPaint.color = col
+            handPaint.alpha = (255 * a).toInt()
+            c.drawLine(cx, cy, cx + kotlin.math.sin(ang).toFloat() * len, cy - kotlin.math.cos(ang).toFloat() * len, handPaint)
+        }
+        val minCol = if (S.i(S.tp(S.TX_MINUTES, S.TP_COLOR)) == 0) OneColors.ACCENT else minPaint.color
+        hand(hourA, r * 0.5f, dp(6f), base)
+        hand(minA, r * 0.76f, dp(4f), minCol)
+        centerPaint.color = minCol
+        centerPaint.alpha = (255 * a).toInt()
+        c.drawCircle(cx, cy, dp(6f), centerPaint)
+        centerPaint.color = Color.WHITE
+        centerPaint.alpha = (255 * a).toInt()
+        c.drawCircle(cx, cy, dp(2.4f), centerPaint)
+        clockRect.set(dialRect)
+        if (S.b(S.DT_SHOW)) drawDateLine(c, datePaint, dateStr, cx, cy + r + dp(32f) + Tx.dy(S.TX_DATE), Paint.Align.CENTER, Tx.alpha(S.TX_DATE, a))
+    }
+
+    /** Fino: cifras muy finas con el separador del color de acento y la fecha arriba en versalitas */
+    private fun drawThinClock(c: Canvas, a: Float, dy: Float, gOff: Float, greet: Boolean, al: Paint.Align) {
+        val x = alignX(al, dp(28f))
+        drawGreeting(c, x, al, a, dy, greet)
+        if (S.b(S.DT_SHOW)) drawDateLine(c, thinSmall, dateStr.uppercase(), x, insetTop + dp(34f) + gOff + dy + Tx.dy(S.TX_DATE), al, Tx.alpha(S.TX_DATE, a))
+        val ty = insetTop + dp(118f) + gOff + dy + Tx.dy(S.TX_CLOCK)
+        val tw = thinPaint.measureText(timeStr)
+        val l = leftOf(x, tw, al)
+        val alpha = Tx.alpha(S.TX_CLOCK, a)
+        thinPaint.textAlign = Paint.Align.LEFT
+        val sepI = timeStr.indexOfFirst { it == ':' || it == '·' }
+        if (clockSp.value < 0.999f || sepI < 0) {
+            rollText(c, thinPaint, timeStr, prevTime, l, ty, alpha)
+        } else {
+            val p1 = timeStr.substring(0, sepI)
+            val sp = timeStr.substring(sepI, sepI + 1)
+            val p2 = timeStr.substring(sepI + 1)
+            thinPaint.alpha = alpha
+            c.drawText(p1, l, ty, thinPaint)
+            val w1 = thinPaint.measureText(p1)
+            sepPaint.set(thinPaint)
+            sepPaint.color = OneColors.ACCENT
+            sepPaint.alpha = alpha
+            c.drawText(sp, l + w1, ty, sepPaint)
+            c.drawText(p2, l + w1 + thinPaint.measureText(sp), ty, thinPaint)
+        }
+        clockRect.set(l, ty - thinPaint.textSize * 0.78f, l + tw, ty + dp(6f))
+    }
+
+    /** Cápsula: la hora y la fecha dentro de una píldora de cristal */
+    private fun drawPillClock(c: Canvas, a: Float, dy: Float, gOff: Float, greet: Boolean, al: Paint.Align) {
+        drawGreeting(c, alignX(al, dp(28f)), al, a, dy, greet)
+        val tw = pillTime.measureText(timeStr)
+        var showDate = S.b(S.DT_SHOW)
+        val dw = if (showDate) datePaint.measureText(dateStr) else 0f
+        var pw = tw + dp(48f) + (if (showDate) dw + dp(33f) else 0f)
+        if (pw > width - dp(32f)) {
+            showDate = false
+            pw = tw + dp(48f)
+        }
+        val ph = dp(76f)
+        val left = when (al) { Paint.Align.LEFT -> dp(16f); Paint.Align.RIGHT -> width - dp(16f) - pw; else -> (width - pw) / 2f }
+        val top = insetTop + dp(16f) + gOff + dy
+        dialRect.set(left, top, left + pw, top + ph)
+        glass.draw(c, dialRect, ph / 2f, a, true, S.SF_DATE)
+        pillTime.textAlign = Paint.Align.LEFT
+        val ty = top + ph / 2f + pillTime.textSize * 0.36f + Tx.dy(S.TX_CLOCK)
+        rollText(c, pillTime, timeStr, prevTime, left + dp(24f), ty, Tx.alpha(S.TX_CLOCK, a))
+        if (showDate) {
+            val sx = left + dp(24f) + tw + dp(16f)
+            centerPaint.color = OneColors.ACCENT
+            centerPaint.alpha = (230 * a).toInt()
+            c.drawRoundRect(sx, top + dp(22f), sx + dp(2.5f), top + ph - dp(22f), dp(1.5f), dp(1.5f), centerPaint)
+            datePaint.textAlign = Paint.Align.LEFT
+            datePaint.alpha = Tx.alpha(S.TX_DATE, a)
+            c.drawText(dateStr, sx + dp(15f), top + ph / 2f + dp(5.5f) + Tx.dy(S.TX_DATE), datePaint)
+            datePaint.textAlign = Paint.Align.CENTER
+        }
+        clockRect.set(dialRect)
+    }
+
+    /** Neón: cifras que brillan con su propio color */
+    private fun drawNeonClock(c: Canvas, a: Float, dy: Float, gOff: Float, greet: Boolean, al: Paint.Align) {
+        val x = alignX(al, dp(28f))
+        drawGreeting(c, x, al, a, dy, greet)
+        neonPaint.textAlign = al
+        val ty = insetTop + dp(92f) + gOff + dy + Tx.dy(S.TX_CLOCK)
+        val alpha = Tx.alpha(S.TX_CLOCK, a)
+        // dos pasadas: la segunda refuerza el brillo
+        rollText(c, neonPaint, timeStr, prevTime, x, ty, alpha)
+        rollText(c, neonPaint, timeStr, prevTime, x, ty, (alpha * 0.6f).toInt())
+        val tw = neonPaint.measureText(timeStr)
+        val l = leftOf(x, tw, al)
+        clockRect.set(l, ty - neonPaint.textSize * 0.8f, l + tw, ty + dp(6f))
+        if (S.b(S.DT_SHOW)) drawDateLine(c, neonDate, dateStr, x, ty + dp(40f) + Tx.dy(S.TX_DATE), al, Tx.alpha(S.TX_DATE, a))
     }
 
     /** dibuja [now]; durante el cambio de minuto [old] sube desvaneciéndose y [now] entra desde abajo */
