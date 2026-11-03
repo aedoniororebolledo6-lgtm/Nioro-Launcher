@@ -49,7 +49,7 @@ class FanView(ctx: Context) : AppsView(ctx) {
     init {
         labelPaint.color = Color.WHITE
         labelPaint.textSize = dp(15f)
-        labelPaint.textAlign = Paint.Align.RIGHT
+        labelPaint.textAlign = Paint.Align.LEFT
     }
 
     private fun layout() {
@@ -124,12 +124,21 @@ class FanView(ctx: Context) : AppsView(ctx) {
             drawIcon(c, e, cx, cy, size, al)
             if (Prefs.labels && q > 0.6f) {
                 val text = e.label
-                val tw = labelPaint.measureText(text) + dp(26f)
-                val right = cx - size / 2f - dp(8f)
-                rectTmp.set(max(dp(10f), right - tw), cy - dp(15f), right, cy + dp(15f))
+                val tw = min(labelPaint.measureText(text) + dp(26f), width * 0.55f)
+                val onRight = cx < width / 2f
+                if (onRight) {
+                    val left = cx + size / 2f + dp(8f)
+                    rectTmp.set(left, cy - dp(15f), left + tw, cy + dp(15f))
+                } else {
+                    val right = cx - size / 2f - dp(8f)
+                    rectTmp.set(right - tw, cy - dp(15f), right, cy + dp(15f))
+                }
                 glass.draw(c, rectTmp, dp(15f), al * 0.9f, false)
                 labelPaint.alpha = (255 * al).toInt().coerceIn(0, 255)
-                c.drawText(text, right - dp(13f), cy + dp(5.5f), labelPaint)
+                c.save()
+                c.clipRect(rectTmp)
+                c.drawText(text, rectTmp.left + dp(13f), cy + dp(5.5f), labelPaint)
+                c.restore()
             }
         }
     }
@@ -140,7 +149,7 @@ class FanView(ctx: Context) : AppsView(ctx) {
             if (dist < -step * 0.6f) continue
             val cx = posX(dist)
             val cy = posY(dist)
-            if (abs(y - cy) < step * 0.5f && x > cx - dp(220f) && x < cx + iconSize * 0.6f) return i
+            if (abs(y - cy) < step * 0.5f && x > cx - dp(220f) && x < cx + dp(220f)) return i
         }
         return -1
     }

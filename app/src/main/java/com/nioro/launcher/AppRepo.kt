@@ -49,6 +49,20 @@ object AppRepo {
 
     fun get(key: String): AppEntry? = byKey[key]
 
+    /** Borra el icono en caché de un paquete (se actualizó o cambió su icono). */
+    fun evict(pkg: String) {
+        exec.execute {
+            val it = cache.keys.iterator()
+            while (it.hasNext()) {
+                val k = it.next()
+                if (k.startsWith("$pkg/")) {
+                    it.remove()
+                    tintCache.remove(k)
+                }
+            }
+        }
+    }
+
     fun visible(): List<AppEntry> {
         val h = Prefs.hidden()
         return apps.filter { it.key !in h }
@@ -318,6 +332,7 @@ object Recents {
         }
     }
 
+    @Synchronized
     fun note(key: String) {
         ensure()
         session.remove(key)
@@ -326,6 +341,7 @@ object Recents {
         Prefs.setRecentKeys(session)
     }
 
+    @Synchronized
     fun forget(key: String) {
         ensure()
         session.remove(key)
@@ -363,6 +379,7 @@ object Recents {
         return res
     }
 
+    @Synchronized
     fun list(ctx: Context): List<AppEntry> {
         ensure()
         val out = ArrayList<AppEntry>()
@@ -382,6 +399,7 @@ object Recents {
     }
 
     /** Apps usadas en los últimos 30 min: se marcan con un puntito bajo el icono del dock. */
+    @Synchronized
     fun recentPackages(ctx: Context): Set<String> {
         ensure()
         val out = HashSet<String>()

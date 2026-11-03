@@ -35,9 +35,12 @@ class MainActivity : Activity() {
     private var drawerP = 0f
     private var recentsP = 0f
     private var resumed = false
+    private var wasStopped = false
+    private val overlayGuard = Runnable { if (resumed && overlay.active) overlay.hide() }
 
     private val pkgReceiver = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
+            i.data?.schemeSpecificPart?.let { AppRepo.evict(it) }
             reloadApps()
         }
     }
@@ -104,9 +107,11 @@ class MainActivity : Activity() {
                 Prefs.setHomeKeys(AppRepo.seedHome(this).filter { it !in dock })
                 Prefs.seeded = true
             }
-            // limpiar apps desinstaladas
-            Prefs.setHomeKeys(Prefs.homeKeys().filter { AppRepo.get(it) != null })
-            Prefs.setDockKeys(Prefs.dockKeys().filter { AppRepo.get(it) != null })
+            // limpiar apps desinstaladas (solo si la lista cargó bien, para no borrar el inicio por error)
+            if (AppRepo.apps.isNotEmpty()) {
+                Prefs.setHomeKeys(Prefs.homeKeys().filter { AppRepo.get(it) != null })
+                Prefs.setDockKeys(Prefs.dockKeys().filter { AppRepo.get(it) != null })
+            }
             home.reload()
             drawer.refreshData()
             refreshRunning()
@@ -126,15 +131,23 @@ class MainActivity : Activity() {
         super.onResume()
         resumed = true
         overlay.hide()
-        home.refreshStyle()
         home.resumeClock()
         drawer.styleChanged()
+        if (wasStopped) {
+            // Al volver (de una app, de Ajustes o al desbloquear) se releen los ajustes.
+            if (!Prefs.seeded) reloadApps() else {
+                home.reload()
+                drawer.refreshData()
+            }
+            home.refreshStyle()
+        }
         if (launchedApp) {
-            launchedApp = false
             if (drawer.isOpen) drawer.closeNow()
             if (recents.isOpen) recents.closeNow()
-            home.playEnter()
         }
+        if (launchedApp || wasStopped) home.playEnter()
+        launchedApp = false
+        wasStopped = false
         refreshRunning()
     }
 
@@ -144,8 +157,10 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        wasStopped = true
         home.pauseClock()
         menu.dismiss()
+        overlay.hide()
         super.onStop()
     }
 
@@ -209,6 +224,9 @@ class MainActivity : Activity() {
             startActivity(AppRepo.intentFor(e), opts.toBundle())
             Recents.note(e.key)
             launchedApp = true
+            // por si la app no llega a cubrir el launcher (p. ej. una ventana flotante)
+            root.removeCallbacks(overlayGuard)
+            root.postDelayed(overlayGuard, 2500)
         } catch (t: Throwable) {
             overlay.hide()
             Toast.makeText(this, "No se pudo abrir ${e.label}", Toast.LENGTH_SHORT).show()

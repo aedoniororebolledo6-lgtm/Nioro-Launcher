@@ -116,9 +116,12 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
         wall(-1f, floor / 2f - 40f, 1f, floor / 2f + 60f) // pared izquierda
         wall(wm + 1f, floor / 2f - 40f, 1f, floor / 2f + 60f) // pared derecha
 
-        val list = if (shown.size > maxBalls) shown.subList(0, maxBalls) else shown
         val r = dp(Prefs.iconDp.toFloat() * 0.5f - 1f) / ppm
         val perRow = (wm / (r * 2.2f)).toInt().coerceAtLeast(2)
+        // solo las esferas que caben en pantalla (el resto se encuentra con la búsqueda)
+        val fitRows = ((floor - topWall) / (r * 2f * 0.95f)).toInt().coerceAtLeast(1)
+        val cap = min(maxBalls, perRow * fitRows)
+        val list = if (shown.size > cap) shown.subList(0, cap) else shown
         for ((i, e) in list.withIndex()) {
             val col = i % perRow
             val row = i / perRow
