@@ -11,8 +11,10 @@ android {
         applicationId = "com.nioro.launcher"
         minSdk = 29
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        // Cada compilación de GitHub Actions sube el número: así el actualizador sabe si hay versión nueva.
+        val run = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
+        versionCode = run
+        versionName = "1.$run"
     }
 
     signingConfigs {

@@ -24,8 +24,10 @@ jobs:
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
       - name: Compilar APK
         run: gradle :app:assembleRelease --no-daemon --stacktrace
-      - name: Renombrar APK
-        run: cp app/build/outputs/apk/release/app-release.apk Nioro-Launcher.apk
+      - name: Renombrar APK y escribir versión
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk Nioro-Launcher.apk
+          echo "${{ github.run_number }}" > version.txt
       - uses: actions/upload-artifact@v4
         with:
           name: Nioro-Launcher
@@ -35,5 +37,7 @@ jobs:
         with:
           tag_name: latest
           name: Nioro Launcher (última versión)
-          files: Nioro-Launcher.apk
+          files: |
+            Nioro-Launcher.apk
+            version.txt
           prerelease: false

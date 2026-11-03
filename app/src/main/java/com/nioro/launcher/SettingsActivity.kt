@@ -292,6 +292,10 @@ class SettingsActivity : Activity() {
         }
         heroStatus?.invoke()
 
+        // Actualizar desde GitHub, sin tienda
+        val up = card(c, dp(6f).toInt())
+        updateRow(up)
+
         // Categorías agrupadas como en los Ajustes de One UI
         val groups = arrayOf(intArrayOf(0, 1, 2), intArrayOf(3, 4), intArrayOf(5, 6), intArrayOf(7))
         for (g in groups) {
@@ -396,12 +400,77 @@ class SettingsActivity : Activity() {
                 val ver = try { packageManager.getPackageInfo(packageName, 0).versionName } catch (t: Throwable) { "?" }
                 button(k, "Versión", ver, Glyphs.INFO) {}
                 divider(k, dp(60f))
-                button(k, "Descargar la última versión", "Abre GitHub para instalar la actualización", Glyphs.CHECK) {
-                    tryStart(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/aedoniororebolledo6-lgtm/Nioro-Launcher/releases/latest")))
-                }
+                updateRow(k)
                 val t = text("Hecho a medida: Kotlin nativo, sin HTML. Física de resortes exacta, cristal líquido dibujado a mano y cero animaciones en reposo.", 13f, 400, OneColors.SUB)
                 t.setPadding(dp(20f).toInt(), dp(14f).toInt(), dp(20f).toInt(), 0)
                 c.addView(t)
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------- Actualizar
+    /** Fila "Actualizar": busca, descarga con barra de progreso e instala directo desde el repositorio. */
+    private fun updateRow(parent: LinearLayout) {
+        val box = LinearLayout(this)
+        box.orientation = LinearLayout.VERTICAL
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        row.gravity = Gravity.CENTER_VERTICAL
+        row.setPadding(dp(14f).toInt(), dp(10f).toInt(), dp(14f).toInt(), dp(10f).toInt())
+        row.background = ripple(dp(22f))
+        row.addView(CategoryIconView(this, Glyphs.CHECK, 0xFF2FC26B.toInt()), LinearLayout.LayoutParams(dp(42f).toInt(), dp(42f).toInt()))
+        val texts = LinearLayout(this)
+        texts.orientation = LinearLayout.VERTICAL
+        texts.setPadding(dp(16f).toInt(), 0, dp(8f).toInt(), 0)
+        texts.addView(text("Actualizar", 17f, 500))
+        val local = Updater.localVersion(this)
+        val sub = text("Versión 1.$local · toca para buscar actualizaciones", 13.5f, 400, OneColors.SUB)
+        sub.setPadding(0, dp(2f).toInt(), 0, 0)
+        texts.addView(sub)
+        row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
+        box.addView(row)
+        val bar = ProgressLine(this)
+        bar.visibility = View.GONE
+        box.addView(bar, LinearLayout.LayoutParams(-1, dp(18f).toInt()))
+        parent.addView(box)
+
+        var remote = -1L
+        fun install() {
+            sub.text = "Descargando… 0 %"
+            bar.visibility = View.VISIBLE
+            bar.set(0f)
+            Updater.downloadAndInstall(this, { pct ->
+                sub.text = "Descargando… $pct %"
+                bar.set(pct / 100f)
+            }) { err ->
+                if (isDestroyed) return@downloadAndInstall
+                if (err != null) {
+                    sub.text = err
+                    bar.visibility = View.GONE
+                } else {
+                    sub.text = "Listo · confirma la instalación"
+                    bar.set(1f)
+                }
+            }
+        }
+        row.setOnClickListener {
+            if (Updater.busy) return@setOnClickListener
+            if (remote > local) {
+                install()
+                return@setOnClickListener
+            }
+            sub.text = "Buscando actualizaciones…"
+            Updater.check { v ->
+                if (isDestroyed) return@check
+                remote = v
+                when {
+                    v < 0 -> sub.text = "Sin conexión con GitHub · inténtalo de nuevo"
+                    v > local -> {
+                        sub.text = "Nueva versión 1.$v disponible · instalando…"
+                        install()
+                    }
+                    else -> sub.text = "Ya tienes la última versión (1.$local)"
+                }
             }
         }
     }
@@ -776,5 +845,27 @@ class HeroView(ctx: Context) : View(ctx) {
             drawApp(c, i + 11, x + sw / 2f, bottom - sz / 2f - (sc[i] - 1f) * base * lf, sz)
             x += sw
         }
+    }
+}
+
+/** Barra de progreso fina estilo One UI. */
+class ProgressLine(ctx: Context) : View(ctx) {
+    private val track = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var p = 0f
+    private val r = RectF()
+
+    fun set(v: Float) {
+        p = clamp01(v)
+        invalidate()
+    }
+
+    override fun onDraw(c: Canvas) {
+        val h = dp(5f)
+        r.set(dp(72f), height / 2f - h / 2f, width - dp(20f), height / 2f + h / 2f)
+        track.color = OneColors.TRACK
+        c.drawRoundRect(r, h / 2f, h / 2f, track)
+        fill.color = OneColors.ACCENT
+        c.drawRoundRect(r.left, r.top, r.left + r.width() * p, r.bottom, h / 2f, h / 2f, fill)
     }
 }
