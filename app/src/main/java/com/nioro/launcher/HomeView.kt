@@ -95,7 +95,41 @@ class HomeView(ctx: Context) : View(ctx) {
     private var prevMin = ""
     /** los puntos de página se iluminan mientras se desliza */
     private val dotsBoost = SpringValue(0f, 300f, 30f, 0.002f)
-    private val extraSprings = arrayOf(dragLift, dragTilt, dropX, dropY, clockSp, dotsBoost)
+    // ---- editor del reloj (mantener pulsado el reloj)
+    /** apertura del editor (0 -> 1, con rebote de burbuja) */
+    private val clockEd = SpringValue(0f, 300f, 20f, 0.002f)
+    /** "boing" de la burbuja: escala que rebota al soltar o cambiar algo */
+    private val clockPop = SpringValue(1f, 420f, 14f, 0.002f)
+    /** se estira en la dirección en que se arrastra, como una gota */
+    private val clockSqu = SpringValue(0f, 260f, 12f, 0.001f)
+    /** posición (dp) y tamaño mostrados: siguen al dedo con un poco de retraso elástico */
+    private val ckX = SpringValue(0f, 260f, 18f, 0.05f)
+    private val ckY = SpringValue(0f, 260f, 18f, 0.05f)
+    private val ckS = SpringValue(1f, 260f, 18f, 0.001f)
+    /** rebote de la burbuja-opción recién tocada */
+    private val chipPulse = SpringValue(1f, 520f, 16f, 0.002f)
+    private val extraSprings = arrayOf(dragLift, dragTilt, dropX, dropY, clockSp, dotsBoost, clockEd, clockPop, clockSqu, ckX, ckY, ckS, chipPulse)
+    var isClockEditing = false
+        private set
+    private var ceMode = 0 // 0 nada, 1 mover, 2 tirador de tamaño, 3 pellizco, 4 opción
+    private var ceDownX = 0f
+    private var ceDownY = 0f
+    private var ceLastX = 0f
+    private var ceLastY = 0f
+    private var ceStartX = 0f
+    private var ceStartY = 0f
+    private var ceStartS = 1f
+    private var ceStartD = 1f
+    private var ceMoved = false
+    private var ceChip = -1
+    private var pulseIdx = -1
+    private val bubble = RectF()
+    private val clockBox = RectF()
+    private val chipRects = Array(8) { RectF() }
+    private val chipLabels = arrayOf("Nioro", "Apilado", "Sistema", "12 h", "24 h", "Fecha", "Restablecer", "Listo")
+    private val chipText = TextPaint(Paint.ANTI_ALIAS_FLAG)
+    private val chipFill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val scrimPaint = Paint()
     private var hourStr = ""
     private var minStr = ""
     private val stackPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
@@ -194,7 +228,11 @@ class HomeView(ctx: Context) : View(ctx) {
         if (touchMode == M_NONE && !moved && k == null && !inDock) {
             touchMode = M_MENU
             unpress()
-            host?.gesture(S.G_LONG)
+            if (Prefs.clockStyle != 2 && (clockRect.contains(downX, downY) || dateRect.contains(downX, downY))) {
+                enterClockEdit(dragging = true)
+            } else {
+                host?.gesture(S.G_LONG)
+            }
         } else if (touchMode == M_NONE && !moved && k != null) {
             val e = AppRepo.get(k)
             if (e != null) {
@@ -261,6 +299,13 @@ class HomeView(ctx: Context) : View(ctx) {
         ticker.add(pressSp)
         ticker.add(editSp)
         for (x in extraSprings) ticker.add(x)
+        ckX.snap(S.f(S.CK_DX))
+        ckY.snap(S.f(S.CK_DY))
+        ckS.snap(S.p(S.CK_SCALE))
+        chipText.color = Color.WHITE
+        chipText.textSize = dp(14.5f)
+        chipText.textAlign = Paint.Align.CENTER
+        chipText.typeface = Typeface.create(Typeface.DEFAULT, 500, false)
         stackPaint.color = Color.WHITE
         stackPaint.textSize = dp(96f)
         stackPaint.typeface = Typeface.create(Typeface.DEFAULT, 300, false)
@@ -459,6 +504,11 @@ class HomeView(ctx: Context) : View(ctx) {
     }
 
     private fun applyStyles() {
+        if (!isClockEditing) {
+            ckX.snap(S.f(S.CK_DX))
+            ckY.snap(S.f(S.CK_DY))
+            ckS.snap(S.p(S.CK_SCALE))
+        }
         Tx.apply(textPaint, S.TX_LABEL_HOME, dp(Prefs.labelSize.toFloat()), 400, dp(3f), 0x99)
         Tx.apply(clockPaint, S.TX_CLOCK, dp(76f), 200, dp(10f), 0x66, -0.02f)
         Tx.apply(datePaint, S.TX_DATE, dp(15f), 500, dp(6f), 0x66)
@@ -727,7 +777,7 @@ class HomeView(ctx: Context) : View(ctx) {
             pressSlot = null
         }
         invalidate()
-        return scrubbing
+        return scrubbing || isClockEditing
     }
 
     private fun slotOfKey(k: String): Slot? {
@@ -806,8 +856,286 @@ class HomeView(ctx: Context) : View(ctx) {
         }
         if (ed > 0.001f) drawEditBar(c, ed)
         drawDrag(c)
+        if (clockEd.value > 0.001f) drawClockEditor(c, clockEd.value)
         c.restore()
         if (S.b(S.P_FPS)) drawFps(c)
+    }
+
+    // ================================================================ Editor del reloj
+    /** curva de "burbuja": pasa un poco de su tamaño y vuelve (como un globo que se infla) */
+    private fun pop(q: Float): Float {
+        val t = clamp01(q) - 1f
+        return 1f + 2.7f * t * t * t + 1.7f * t * t
+    }
+
+    private fun chipSelected(i: Int): Boolean = when (i) {
+        0 -> Prefs.clockStyle == 0
+        1 -> Prefs.clockStyle == 1
+        2, 3, 4 -> S.i(S.CK_FORMAT) == i - 2
+        5 -> S.b(S.DT_SHOW)
+        7 -> true
+        else -> false
+    }
+
+    /** coloca las 8 burbujas-opción en 3 filas sobre el dock */
+    private val chipRows = arrayOf(intArrayOf(0, 1), intArrayOf(2, 3, 4), intArrayOf(5, 6, 7))
+
+    private fun layoutChips() {
+        val rowsIdx = chipRows
+        val h = dp(42f)
+        val gap = dp(10f)
+        var y = (if (S.b(S.K_SHOW)) dockTopY() else height - insetBottom - dp(20f)) - dp(24f) - 3 * h - 2 * dp(12f)
+        for (row in rowsIdx) {
+            var total = 0f
+            for (i in row) total += chipText.measureText(chipLabels[i]) + dp(36f)
+            total += gap * (row.size - 1)
+            var x = (width - total) / 2f
+            for (i in row) {
+                val cw = chipText.measureText(chipLabels[i]) + dp(36f)
+                chipRects[i].set(x, y, x + cw, y + h)
+                x += cw + gap
+            }
+            y += h + dp(12f)
+        }
+    }
+
+    private fun drawClockEditor(c: Canvas, ce: Float) {
+        val a = clamp01(ce)
+        // 1) el resto del inicio se oscurece
+        scrimPaint.color = Color.BLACK
+        scrimPaint.alpha = (120 * a).toInt()
+        c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), scrimPaint)
+        // 2) burbuja de cristal que "respira" alrededor del reloj
+        if (!clockBox.isEmpty) {
+            val t = android.os.SystemClock.uptimeMillis() / 1000f
+            val breathe = 1f + 0.018f * kotlin.math.sin(t * 3.1f) * a
+            val inflate = lerp(0.55f, 1f, ce) * breathe
+            val pad = dp(18f)
+            val bw = (clockBox.width() / 2f + pad) * inflate * (1f + clockSqu.value * 0.6f)
+            val bh = (clockBox.height() / 2f + pad) * inflate * (1f - clockSqu.value * 0.6f)
+            bubble.set(clockBox.centerX() - bw, clockBox.centerY() - bh, clockBox.centerX() + bw, clockBox.centerY() + bh)
+            glass.draw(c, bubble, dp(34f), a, true, S.SF_EDIT_FRAME)
+        }
+        // 3) el reloj, nítido encima
+        drawClock(c, false)
+        if (clockBox.isEmpty) return
+        // 4) tirador de tamaño en la esquina de la burbuja
+        val hq = pop(clamp01((ce - 0.25f) / 0.6f))
+        val hx = bubble.right
+        val hy = bubble.bottom
+        val hr = dp(19f) * hq
+        if (hr > 0.5f) {
+            capRect.set(hx - hr, hy - hr, hx + hr, hy + hr)
+            glass.draw(c, capRect, hr, a, true, S.SF_EDIT_BTN)
+            Glyphs.draw(c, Glyphs.RESIZE, hx, hy, dp(18f) * hq, Color.WHITE, a)
+        }
+        // 5) ayuda
+        editLabel.alpha = (200 * a).toInt()
+        layoutChips()
+        c.drawText("Arrástralo · tira de la esquina para el tamaño", width / 2f, chipRects[0].top - dp(16f), editLabel)
+        // 6) burbujas-opción que aparecen una tras otra, infladas
+        for (i in chipLabels.indices) {
+            val q = pop(clamp01((ce - 0.2f - i * 0.055f) / 0.45f))
+            if (q <= 0.01f) continue
+            val r = chipRects[i]
+            val pulse = if (i == pulseIdx) chipPulse.value else 1f
+            val s = q * pulse
+            c.save()
+            c.scale(s, s, r.centerX(), r.centerY())
+            val sel = chipSelected(i)
+            if (sel) {
+                chipFill.color = if (i == 7) 0xFF2FC26B.toInt() else OneColors.ACCENT
+                chipFill.alpha = (215 * a).toInt()
+                c.drawRoundRect(r, r.height() / 2f, r.height() / 2f, chipFill)
+            }
+            glass.draw(c, r, r.height() / 2f, a * (if (sel) 0.55f else 1f), !sel, S.SF_EDIT_BTN)
+            chipText.alpha = (255 * a).toInt()
+            c.drawText(chipLabels[i], r.centerX(), r.centerY() + dp(5f), chipText)
+            c.restore()
+        }
+    }
+
+    /** entra al editor; si viene de una pulsación larga, el mismo dedo ya puede arrastrar el reloj */
+    fun enterClockEdit(dragging: Boolean = false) {
+        if (Prefs.clockStyle == 2 || isEditing || isClockEditing) return
+        isClockEditing = true
+        host?.dismissMenu()
+        Mo.tune(clockEd, S.MO_EDIT_IN, 300f, 0.5f)
+        clockEd.to(1f)
+        Mo.tune(clockPop, S.MO_EDIT_IN, 420f, 0.3f)
+        clockPop.snap(0.86f)
+        clockPop.to(1f)
+        Hx.fire(this, S.HE_LONG)
+        ceMode = if (dragging) 1 else 0
+        ceMoved = false
+        ceDownX = downX
+        ceDownY = downY
+        ceLastX = downX
+        ceLastY = downY
+        ceStartX = ckX.target
+        ceStartY = ckY.target
+        ticker.kick()
+        invalidate()
+    }
+
+    fun exitClockEdit(now: Boolean = false) {
+        if (!isClockEditing && clockEd.value <= 0.001f) return
+        if (isClockEditing) saveClock()
+        isClockEditing = false
+        ceMode = 0
+        clockSqu.to(0f)
+        if (now) {
+            clockEd.snap(0f)
+            clockSqu.snap(0f)
+            invalidate()
+            return
+        }
+        Mo.tune(clockEd, S.MO_EDIT_OUT, 320f, 1f)
+        clockEd.to(0f)
+        ticker.kick()
+    }
+
+    private fun saveClock() {
+        S.set(S.CK_DX, ckX.target)
+        S.set(S.CK_DY, ckY.target)
+        S.set(S.CK_SCALE, ckS.target * 100f)
+    }
+
+    /** rebote de globo de la burbuja (al soltar o al cambiar una opción) */
+    private fun boing(strength: Float) {
+        Mo.tune(clockPop, S.MO_EDIT_IN, 420f, 0.28f)
+        clockPop.velocity = -strength
+        clockPop.to(1f)
+        ticker.kick()
+    }
+
+    private fun chipAction(i: Int) {
+        pulseIdx = i
+        Mo.tune(chipPulse, S.MO_EDIT_IN, 520f, 0.3f)
+        chipPulse.snap(0.8f)
+        chipPulse.to(1f)
+        Hx.fire(this, S.HE_SETTING)
+        when (i) {
+            0, 1 -> if (Prefs.clockStyle != i) {
+                Prefs.clockStyle = i
+                relayout()
+                boing(4f)
+            }
+            2, 3, 4 -> {
+                S.set(S.CK_FORMAT, (i - 2).toFloat())
+                lastMinute = -1L
+                updateClock()
+                boing(2.5f)
+            }
+            5 -> {
+                S.set(S.DT_SHOW, if (S.b(S.DT_SHOW)) 0f else 1f)
+                datePillW = 0f
+                boing(2.5f)
+            }
+            6 -> {
+                ckX.to(0f)
+                ckY.to(0f)
+                ckS.to(1f)
+                saveClock()
+                boing(3f)
+            }
+            7 -> exitClockEdit()
+        }
+        ticker.kick()
+        invalidate()
+    }
+
+    private fun clockEditTouch(ev: MotionEvent): Boolean {
+        val x = ev.x
+        val y = ev.y
+        val d = resources.displayMetrics.density
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                ceDownX = x
+                ceDownY = y
+                ceLastX = x
+                ceLastY = y
+                ceMoved = false
+                ceChip = -1
+                ceMode = 0
+                layoutChips()
+                for (i in chipRects.indices) if (chipRects[i].contains(x, y)) {
+                    ceMode = 4
+                    ceChip = i
+                }
+                if (ceMode == 0 && hypot(x - bubble.right, y - bubble.bottom) < dp(32f)) {
+                    ceMode = 2
+                    ceStartS = ckS.target
+                    ceStartD = hypot(x - bubble.centerX(), y - bubble.centerY()).coerceAtLeast(dp(20f))
+                } else if (ceMode == 0 && bubble.contains(x, y)) {
+                    ceMode = 1
+                    ceStartX = ckX.target
+                    ceStartY = ckY.target
+                    Mo.tune(clockPop, S.MO_PRESS, 600f, 1f)
+                    clockPop.to(1.06f) // se "levanta" al tocarla
+                    Hx.fire(this, S.HE_ICON)
+                }
+                ticker.kick()
+                return true
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                if (ev.pointerCount == 2) {
+                    ceMode = 3
+                    ceStartS = ckS.target
+                    ceStartD = hypot(ev.getX(0) - ev.getX(1), ev.getY(0) - ev.getY(1)).coerceAtLeast(dp(20f))
+                }
+                return true
+            }
+            MotionEvent.ACTION_MOVE -> {
+                if (hypot(x - ceDownX, y - ceDownY) > slop) ceMoved = true
+                when (ceMode) {
+                    1 -> {
+                        Mo.tune(ckX, S.MO_EDIT_IN, 260f, 0.55f)
+                        Mo.tune(ckY, S.MO_EDIT_IN, 260f, 0.55f)
+                        ckX.to((ceStartX + (x - ceDownX) / d).coerceIn(-180f, 180f))
+                        ckY.to((ceStartY + (y - ceDownY) / d).coerceIn(-60f, 420f))
+                        // se estira hacia donde va: horizontal ensancha, vertical alarga
+                        val sdx = abs(x - ceLastX)
+                        val sdy = abs(y - ceLastY)
+                        Mo.tune(clockSqu, S.MO_EDIT_IN, 260f, 0.25f)
+                        clockSqu.to(((sdx - sdy) * 0.006f).coerceIn(-0.14f, 0.14f))
+                    }
+                    2 -> {
+                        val dd = hypot(x - bubble.centerX(), y - bubble.centerY())
+                        Mo.tune(ckS, S.MO_EDIT_IN, 260f, 0.55f)
+                        ckS.to((ceStartS * dd / ceStartD).coerceIn(0.5f, 2f))
+                    }
+                    3 -> if (ev.pointerCount >= 2) {
+                        val dd = hypot(ev.getX(0) - ev.getX(1), ev.getY(0) - ev.getY(1))
+                        Mo.tune(ckS, S.MO_EDIT_IN, 260f, 0.55f)
+                        ckS.to((ceStartS * dd / ceStartD).coerceIn(0.5f, 2f))
+                    }
+                }
+                ceLastX = x
+                ceLastY = y
+                ticker.kick()
+                return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val up = ev.actionMasked == MotionEvent.ACTION_UP
+                when (ceMode) {
+                    1, 2, 3 -> {
+                        saveClock()
+                        Mo.tune(clockSqu, S.MO_EDIT_IN, 260f, 0.22f)
+                        clockSqu.to(0f)
+                        // al soltarla la burbuja rebota como un globo
+                        boing(if (ceMoved) 3.5f else 1.5f)
+                        if (ceMoved) Hx.fire(this, S.HE_SETTING)
+                    }
+                    4 -> if (up && ceChip >= 0 && chipRects[ceChip].contains(x, y)) chipAction(ceChip)
+                    else -> if (up && !ceMoved) exitClockEdit()
+                }
+                ceMode = 0
+                ticker.kick()
+                return true
+            }
+        }
+        return true
     }
 
     /** oscurecer el fondo de pantalla y degradados superior/inferior (estilo One UI) */
@@ -903,7 +1231,49 @@ class HomeView(ctx: Context) : View(ctx) {
         return -1
     }
 
+    /** punto alrededor del cual el reloj crece y se estira */
+    private fun clockPivotX(): Float {
+        val align = S.i(S.CK_ALIGN)
+        return if (Prefs.clockStyle == 1) (if (align == 2) width - dp(96f) else dp(96f))
+        else when (align) { 1 -> dp(110f); 2 -> width - dp(110f); else -> width / 2f }
+    }
+
+    private fun clockPivotY(): Float =
+        insetTop + (if (Prefs.clockStyle == 1) dp(130f) else dp(80f)) + dp(ckY.value) + (if (S.b(S.DT_GREETING)) dp(22f) else 0f)
+
+    /** pasa un rectángulo del reloj "sin transformar" a su posición real en pantalla */
+    private fun mapClock(r: RectF, px: Float, py: Float, sx: Float, sy: Float, tx: Float) {
+        if (r.isEmpty) return
+        r.set(px + (r.left - px) * sx + tx, py + (r.top - py) * sy, px + (r.right - px) * sx + tx, py + (r.bottom - py) * sy)
+    }
+
     private fun drawClock(c: Canvas, enterOn: Boolean) {
+        if (Prefs.clockStyle == 2) {
+            updateClock()
+            clockRect.setEmpty()
+            dateRect.setEmpty()
+            clockBox.setEmpty()
+            return
+        }
+        val px = clockPivotX()
+        val py = clockPivotY()
+        val s = ckS.value * clockPop.value
+        val sq = clockSqu.value
+        val sx = s * (1f + sq)
+        val sy = s * (1f - sq)
+        val tx = dp(ckX.value)
+        c.save()
+        c.translate(tx, 0f)
+        c.scale(sx, sy, px, py)
+        drawClockRaw(c, enterOn)
+        c.restore()
+        mapClock(clockRect, px, py, sx, sy, tx)
+        mapClock(dateRect, px, py, sx, sy, tx)
+        clockBox.set(clockRect)
+        if (!dateRect.isEmpty) clockBox.union(dateRect)
+    }
+
+    private fun drawClockRaw(c: Canvas, enterOn: Boolean) {
         var a = 1f
         var dy = 0f
         if (enterOn) {
@@ -915,7 +1285,7 @@ class HomeView(ctx: Context) : View(ctx) {
         clockRect.setEmpty()
         dateRect.setEmpty()
         if (Prefs.clockStyle == 2) return
-        dy += dp(S.f(S.CK_DY))
+        dy += dp(ckY.value)
         val align = S.i(S.CK_ALIGN)
         val w = width.toFloat()
         val greet = S.b(S.DT_GREETING)
@@ -1426,6 +1796,9 @@ class HomeView(ctx: Context) : View(ctx) {
     }
 
     override fun onTouchEvent(ev: MotionEvent): Boolean {
+        if (isClockEditing) return clockEditTouch(ev)
+        // mientras el editor del reloj se cierra no se tocan iconos por accidente
+        if (clockEd.value > 0.05f) return true
         if (isEditing) return editTouch(ev)
         // mientras se cierra el modo edición las páginas aún están encogidas: se ignoran toques
         if (editSp.value > 0.02f) return true

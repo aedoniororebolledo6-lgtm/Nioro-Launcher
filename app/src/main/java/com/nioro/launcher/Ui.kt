@@ -58,6 +58,7 @@ object Glyphs {
     const val HIDE = 18
     const val PLUS = 19
     const val MINUS = 20
+    const val RESIZE = 21
 
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private val path = Path()
@@ -182,6 +183,12 @@ object Glyphs {
             }
             MINUS -> {
                 c.drawLine(5f, 12f, 19f, 12f, p)
+            }
+            RESIZE -> {
+                c.drawLine(6f, 18f, 18f, 6f, p)
+                path.moveTo(12.5f, 6f); path.lineTo(18f, 6f); path.lineTo(18f, 11.5f)
+                path.moveTo(6f, 12.5f); path.lineTo(6f, 18f); path.lineTo(11.5f, 18f)
+                c.drawPath(path, p)
             }
         }
         c.restore()
