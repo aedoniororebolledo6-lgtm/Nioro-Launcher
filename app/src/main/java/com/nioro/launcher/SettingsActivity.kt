@@ -675,13 +675,13 @@ class SettingsActivity : Activity() {
         val dots = ArrayList<ColorDot>()
         for (i in S.PAL.indices) {
             val dv = ColorDot(this, S.PAL[i], i == 0)
-            dv.selected = i == cur
+            dv.picked = i == cur
             dv.setOnClickListener {
                 for (x in dots) {
-                    x.selected = false
+                    x.picked = false
                     x.invalidate()
                 }
-                dv.selected = true
+                dv.picked = true
                 dv.invalidate()
                 name.text = title + ": " + S.PAL_NAMES[i]
                 Hx.fire(it, S.HE_SETTING)
@@ -1348,7 +1348,7 @@ class GridPreview(ctx: Context) : View(ctx) {
 
 /** Círculo de color para elegir de la paleta (el primero es "Automático"). */
 class ColorDot(ctx: Context, private val color: Int, private val auto: Boolean) : View(ctx) {
-    var selected = false
+    var picked = false
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
 
@@ -1366,11 +1366,11 @@ class ColorDot(ctx: Context, private val color: Int, private val auto: Boolean) 
         ring.strokeWidth = dp(1f)
         ring.color = 0x55FFFFFF
         c.drawCircle(cx, cy, r, ring)
-        if (selected) {
+        if (picked) {
             ring.strokeWidth = dp(2.5f)
             ring.color = Color.WHITE
             c.drawCircle(cx, cy, r + dp(3f), ring)
         }
-        if (auto) Glyphs.draw(c, Glyphs.CHECK, cx, cy, r * 1.1f, 0xCCFFFFFF.toInt(), if (selected) 1f else 0f)
+        if (auto) Glyphs.draw(c, Glyphs.CHECK, cx, cy, r * 1.1f, 0xCCFFFFFF.toInt(), if (picked) 1f else 0f)
     }
 }
