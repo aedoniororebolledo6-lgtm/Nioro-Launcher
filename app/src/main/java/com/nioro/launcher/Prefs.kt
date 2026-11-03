@@ -9,6 +9,7 @@ class LauncherApp : Application() {
     override fun onCreate() {
         super.onCreate()
         Prefs.init(this)
+        S.init(this)
     }
 }
 

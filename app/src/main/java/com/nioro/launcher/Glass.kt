@@ -78,25 +78,101 @@ class Glass {
         floatArrayOf(0f, 0.25f, 0.55f, 0.85f, 1f), Shader.TileMode.CLAMP
     )
 
-    fun draw(c: Canvas, r: RectF, rad: Float, a: Float = 1f, shadow: Boolean = true) {
-        val al = if (a > 1f) 1f else a
-        if (al <= 0.01f || r.width() < 1f || r.height() < 1f) return
-        var k = Prefs.glass / 60f
-        if (k < 0.3f) k = 0.3f
-        if (k > 1.6f) k = 1.6f
-        val rr = minOf(rad, r.height() / 2f, r.width() / 2f)
+    private val rr2 = RectF()
+    private val filters = HashMap<Int, android.graphics.ColorFilter>()
+    private var gradShader: LinearGradient? = null
+    private var gradA = 0
+    private var gradB = 0
 
-        if (shadow && !Prefs.saver) {
-            sh.color = Color.argb((26f * al).toInt(), 0, 0, 0)
+    private fun filter(color: Int): android.graphics.ColorFilter =
+        filters.getOrPut(color) { android.graphics.PorterDuffColorFilter(color, android.graphics.PorterDuff.Mode.MULTIPLY) }
+
+    /**
+     * Dibuja el cristal. [surf] es la superficie (S.SF_*): con ella se aplican sus 19 ajustes
+     * (tinte, borde, lente, sombra, tamaño...). Con -1 se usa el estilo base.
+     */
+    fun draw(c: Canvas, r0: RectF, rad0: Float, a: Float = 1f, shadow: Boolean = true, surf: Int = -1) {
+        var r = r0
+        var rad = rad0
+        var al = if (a > 1f) 1f else a
+        var tint = Color.rgb(12, 20, 44)
+        var tintOp = 1f
+        var kMul = 1f
+        var rimW = 1f
+        var rimB = 1f
+        var rimColor = 0
+        var lensM = 1f
+        var lensH = 0.58f
+        var causM = 1f
+        var innerM = 1f
+        var shOn = shadow
+        var shS = 1f
+        var shY = 1f
+        var grad = false
+        var tint2 = 0
+        if (surf >= 0) {
+            if (!S.b(S.gp(surf, S.GP_VISIBLE))) return
+            val size = S.p(S.gp(surf, S.GP_SIZE))
+            if (size != 1f) {
+                val dw = r0.width() * (size - 1f) / 2f
+                val dh = r0.height() * (size - 1f) / 2f
+                rr2.set(r0.left - dw, r0.top - dh, r0.right + dw, r0.bottom + dh)
+                r = rr2
+            }
+            tint = S.col(S.gp(surf, S.GP_TINT), tint)
+            tintOp = S.p(S.gp(surf, S.GP_TINT_OP))
+            kMul = S.p(S.gp(surf, S.GP_INTENSITY))
+            rad *= S.p(S.gp(surf, S.GP_RADIUS))
+            rimW = S.p(S.gp(surf, S.GP_RIM_W))
+            rimB = S.p(S.gp(surf, S.GP_RIM_B))
+            rimColor = S.col(S.gp(surf, S.GP_RIM_COLOR), 0)
+            lensM = S.p(S.gp(surf, S.GP_LENS))
+            lensH = S.p(S.gp(surf, S.GP_LENS_H))
+            causM = S.p(S.gp(surf, S.GP_CAUSTIC))
+            innerM = S.p(S.gp(surf, S.GP_INNER))
+            shOn = shadow && S.b(S.gp(surf, S.GP_SHADOW))
+            shS = S.p(S.gp(surf, S.GP_SHADOW_S))
+            shY = S.p(S.gp(surf, S.GP_SHADOW_Y))
+            al *= S.p(S.gp(surf, S.GP_ALPHA))
+            grad = S.b(S.gp(surf, S.GP_GRAD))
+            if (grad) tint2 = S.col(S.gp(surf, S.GP_TINT2), 0xFF8B5CF6.toInt())
+            if (al > 1f) al = 1f
+        }
+        if (al <= 0.01f || r.width() < 1f || r.height() < 1f) return
+        var k = Prefs.glass / 60f * kMul
+        if (k < 0.2f) k = 0.2f
+        if (k > 2f) k = 2f
+        val rr = maxOf(0f, minOf(rad, r.height() / 2f, r.width() / 2f))
+
+        val shadowQ = S.i(S.P_SHADOWS)
+        if (shOn && !Prefs.saver && shadowQ > 0) {
             val g1 = dp(6f)
-            c.drawRoundRect(r.left - g1 * 0.5f, r.top + g1 * 0.6f, r.right + g1 * 0.5f, r.bottom + g1 * 1.6f, rr + g1, rr + g1, sh)
-            sh.color = Color.argb((22f * al).toInt(), 0, 0, 0)
+            if (shadowQ == 2) {
+                sh.color = Color.argb((26f * al * shS).toInt().coerceIn(0, 255), 0, 0, 0)
+                c.drawRoundRect(r.left - g1 * 0.5f, r.top + g1 * 0.6f * shY, r.right + g1 * 0.5f, r.bottom + g1 * 1.6f * shY, rr + g1, rr + g1, sh)
+            }
+            sh.color = Color.argb((22f * al * shS).toInt().coerceIn(0, 255), 0, 0, 0)
             val g2 = dp(2f)
-            c.drawRoundRect(r.left, r.top + g2, r.right, r.bottom + g2 * 1.5f, rr + g2, rr + g2, sh)
+            c.drawRoundRect(r.left, r.top + g2 * shY, r.right, r.bottom + g2 * 1.5f * shY, rr + g2, rr + g2, sh)
         }
 
-        // cuerpo teñido
-        base.color = Color.argb(minOf(200f, 58f * al * k).toInt(), 12, 20, 44)
+        // cuerpo teñido (color sólido o degradado)
+        val baseA = minOf(230f, 58f * al * k * tintOp).toInt().coerceIn(0, 255)
+        if (grad) {
+            if (gradShader == null || gradA != tint || gradB != tint2) {
+                gradShader = LinearGradient(0f, 0f, 1f, 1f, tint, tint2, Shader.TileMode.CLAMP)
+                gradA = tint
+                gradB = tint2
+            }
+            m.setScale(r.width(), r.height())
+            m.postTranslate(r.left, r.top)
+            gradShader!!.setLocalMatrix(m)
+            base.shader = gradShader
+            base.alpha = baseA
+        } else {
+            base.shader = null
+            base.color = (tint and 0x00FFFFFF) or (baseA shl 24)
+        }
         c.drawRoundRect(r, rr, rr, base)
 
         val fa = minOf(1f, al * minOf(1.35f, k))
@@ -107,40 +183,50 @@ class Glass {
         fill.alpha = (255f * fa).toInt()
         c.drawRoundRect(r, rr, rr, fill)
 
-        // lente superior: rectángulo redondeado más pequeño en la mitad de arriba
-        val inset = minOf(dp(3f), r.height() * 0.08f)
-        tmp.set(r.left + inset, r.top + inset, r.right - inset, r.top + r.height() * 0.58f)
-        m.setScale(1f, tmp.height())
-        m.postTranslate(0f, tmp.top)
-        lensShader.setLocalMatrix(m)
-        lens.shader = lensShader
-        lens.alpha = (255f * fa).toInt()
-        val lr = maxOf(0f, rr - inset)
-        c.drawRoundRect(tmp, lr, lr, lens)
+        // lente superior
+        if (lensM > 0.01f) {
+            val inset = minOf(dp(3f), r.height() * 0.08f)
+            tmp.set(r.left + inset, r.top + inset, r.right - inset, r.top + r.height() * lensH)
+            m.setScale(1f, tmp.height())
+            m.postTranslate(0f, tmp.top)
+            lensShader.setLocalMatrix(m)
+            lens.shader = lensShader
+            lens.alpha = (255f * fa * lensM).toInt().coerceIn(0, 255)
+            val lr = maxOf(0f, rr - inset)
+            c.drawRoundRect(tmp, lr, lr, lens)
+        }
 
         // cáustica inferior
-        m.setScale(1f, r.height())
-        m.postTranslate(0f, r.top)
-        causticShader.setLocalMatrix(m)
-        caustic.shader = causticShader
-        caustic.alpha = (255f * fa).toInt()
-        c.drawRoundRect(r, rr, rr, caustic)
+        if (causM > 0.01f) {
+            m.setScale(1f, r.height())
+            m.postTranslate(0f, r.top)
+            causticShader.setLocalMatrix(m)
+            caustic.shader = causticShader
+            caustic.alpha = (255f * fa * causM).toInt().coerceIn(0, 255)
+            c.drawRoundRect(r, rr, rr, caustic)
+        }
 
         // borde especular
-        val sw = dp(1.1f)
-        rim.strokeWidth = sw
-        m.setScale(r.width(), r.height())
-        m.postTranslate(r.left, r.top)
-        rimShader.setLocalMatrix(m)
-        rim.shader = rimShader
-        rim.alpha = (255f * minOf(1f, al * minOf(1.2f, k))).toInt()
-        val hw = sw / 2f
-        c.drawRoundRect(r.left + hw, r.top + hw, r.right - hw, r.bottom - hw, rr - hw, rr - hw, rim)
-        // borde interior oscuro: da grosor al cristal
-        inner.strokeWidth = sw
-        inner.color = Color.argb((34f * al).toInt(), 0, 0, 0)
-        val i2 = sw * 1.5f
-        c.drawRoundRect(r.left + i2, r.top + i2, r.right - i2, r.bottom - i2, maxOf(0f, rr - i2), maxOf(0f, rr - i2), inner)
+        val sw = dp(1.1f) * rimW
+        if (sw > 0.05f) {
+            rim.strokeWidth = sw
+            m.setScale(r.width(), r.height())
+            m.postTranslate(r.left, r.top)
+            rimShader.setLocalMatrix(m)
+            rim.shader = rimShader
+            rim.colorFilter = if (rimColor != 0) filter(rimColor) else null
+            rim.alpha = (255f * minOf(1f, al * minOf(1.2f, k) * rimB)).toInt().coerceIn(0, 255)
+            val hw = sw / 2f
+            c.drawRoundRect(r.left + hw, r.top + hw, r.right - hw, r.bottom - hw, maxOf(0f, rr - hw), maxOf(0f, rr - hw), rim)
+        }
+        // borde interior oscuro
+        if (innerM > 0.01f) {
+            val iw = dp(1.1f)
+            inner.strokeWidth = iw
+            inner.color = Color.argb((34f * al * innerM).toInt().coerceIn(0, 255), 0, 0, 0)
+            val i2 = iw * 1.5f + (sw - dp(1.1f)).coerceAtLeast(0f)
+            c.drawRoundRect(r.left + i2, r.top + i2, r.right - i2, r.bottom - i2, maxOf(0f, rr - i2), maxOf(0f, rr - i2), inner)
+        }
     }
 }
 
@@ -236,7 +322,7 @@ object IconShadow {
 
     /** Dibuja la sombra para un icono centrado en (cx, cy) de tamaño size. */
     fun draw(c: Canvas, cx: Float, cy: Float, size: Float, a: Float) {
-        if (Prefs.saver || a <= 0.02f) return
+        if (Prefs.saver || a <= 0.02f || S.i(S.P_SHADOWS) == 0) return
         val b = get()
         val full = size * (144f / 96f)
         val oy = size * 0.07f

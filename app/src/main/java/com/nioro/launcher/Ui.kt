@@ -17,7 +17,8 @@ import kotlin.math.sin
 
 /** Colores estilo One UI. */
 object OneColors {
-    const val ACCENT = 0xFF3E91FF.toInt()      // azul One UI
+    /** color de acento (configurable; por defecto el azul One UI) */
+    val ACCENT: Int get() = S.col(S.L_ACCENT, 0xFF3E91FF.toInt())
     const val TEXT = 0xFFFFFFFF.toInt()
     const val SUB = 0x99FFFFFF.toInt()
     const val TRACK = 0x40FFFFFF
