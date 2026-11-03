@@ -334,12 +334,14 @@ class SettingsActivity : Activity() {
 
                 val k0 = card(c)
                 choice(k0, "Forma de los iconos", SHAPES, Prefs.iconShape, -1, SHAPE_DESC) {
-                    Prefs.iconShape = it
-                    gp.busy = true
-                    gp.invalidate()
-                    AppRepo.load(this) {
-                        gp.busy = false
+                    if (Prefs.iconShape != it) {
+                        Prefs.iconShape = it
+                        gp.busy = true
                         gp.invalidate()
+                        AppRepo.load(this) {
+                            if (AppRepo.bakedShape == Prefs.iconShape) gp.busy = false
+                            gp.invalidate()
+                        }
                     }
                 }
 

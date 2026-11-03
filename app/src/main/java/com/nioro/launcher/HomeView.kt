@@ -332,6 +332,8 @@ class HomeView(ctx: Context) : View(ctx) {
         val minCell = iconPx + labelH + dp(24f)
         // filas: automáticas según el espacio, o las que elija el usuario
         rows = if (Prefs.rows > 0) Prefs.rows.coerceIn(3, 8) else (avail / minCell).toInt().coerceIn(2, 7)
+        // si las filas elegidas no caben, se reducen en vez de encimar iconos y nombres
+        while (rows > 2 && avail / rows < dp(28f) + labelH + dp(8f)) rows--
         cap = cols * rows
         cellW = w / cols
         cellH = avail / rows
@@ -437,7 +439,7 @@ class HomeView(ctx: Context) : View(ctx) {
     }
 
     private fun iconCenterY(row: Int): Float =
-        gridTop + row * cellH + cellH / 2f - (if (Prefs.labels) dp(9f) else 0f)
+        gridTop + row * cellH + cellH / 2f - (if (Prefs.labels) dp(Prefs.labelSize * 0.75f) else 0f)
 
     private fun homeIconRect(idx: Int, out: RectF) {
         if (idx < 0) {

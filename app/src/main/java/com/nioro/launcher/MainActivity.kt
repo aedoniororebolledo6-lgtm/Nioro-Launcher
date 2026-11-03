@@ -125,11 +125,14 @@ class MainActivity : Activity() {
                 Prefs.setHomeKeys(Prefs.homeKeys().filter { AppRepo.get(it) != null })
                 Prefs.setDockKeys(Prefs.dockKeys().filter { AppRepo.get(it) != null })
             }
+            seenIcons = AppRepo.version
             home.reload()
             drawer.refreshData()
             refreshRunning()
         }
     }
+
+    private var seenIcons = -1
 
     private fun refreshRunning() {
         val ctx = applicationContext
@@ -149,7 +152,7 @@ class MainActivity : Activity() {
         drawer.styleChanged()
         if (wasStopped) {
             // Al volver (de una app, de Ajustes o al desbloquear) se releen los ajustes.
-            if (!Prefs.seeded || AppRepo.bakedShape != Prefs.iconShape) reloadApps() else {
+            if (!Prefs.seeded || AppRepo.bakedShape != Prefs.iconShape || AppRepo.version != seenIcons) reloadApps() else {
                 home.reload()
                 drawer.refreshData()
             }

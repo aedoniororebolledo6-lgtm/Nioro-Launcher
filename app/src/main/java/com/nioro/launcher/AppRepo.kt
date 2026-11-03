@@ -89,11 +89,11 @@ object AppRepo {
             try {
                 // si cambió la forma de los iconos, se vuelven a hornear todos
                 val shape = Prefs.iconShape
-                val shapeChanged = shape != bakedShape
+                val shapeChanged = shape != workerShape
                 if (shapeChanged) {
                     cache.clear()
                     tintCache.clear()
-                    bakedShape = shape
+                    workerShape = shape
                 }
                 val pm = app.packageManager
                 val q = Intent(Intent.ACTION_MAIN)
@@ -101,6 +101,8 @@ object AppRepo {
                 val list = pm.queryIntentActivities(q, 0)
                 val out = ArrayList<AppEntry>()
                 for (ri in list) {
+                    // si se eligió otra forma mientras horneaba, se abandona: la carga siguiente la hará
+                    if (Prefs.iconShape != shape) throw InterruptedException("forma cambiada")
                     val ai = ri.activityInfo ?: continue
                     val key = ai.packageName + "/" + ai.name
                     val label = try { ri.loadLabel(pm).toString() } catch (t: Throwable) { ai.packageName }
@@ -123,21 +125,28 @@ object AppRepo {
                     out.add(e)
                 }
                 out.sortBy { it.label.lowercase() }
-                if (launchpadIcon == null || shapeChanged) buildSpecials()
+                if (launchpadIcon == null || shapeChanged) buildSpecials(shape)
                 val map = HashMap<String, AppEntry>()
                 for (e in out) map[e.key] = e
                 main.post {
                     apps = out
                     byKey = map
+                    bakedShape = shape
+                    version++
                     done()
                 }
             } catch (t: Throwable) {
+                workerShape = -1
                 main.post { done() }
             }
         }
     }
 
     @Volatile var bakedShape = -1
+        private set
+    private var workerShape = -1
+    /** sube cada vez que cambian los iconos (las vistas lo comparan para refrescarse) */
+    var version = 0
         private set
 
     // ---------------- Iconos ----------------
@@ -291,7 +300,7 @@ object AppRepo {
         }
     }
 
-    private fun buildSpecials() {
+    private fun buildSpecials(shape: Int) {
         val size = px()
         // Launchpad: degradado + rejilla 3x3 de cuadritos de colores.
         val a = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
@@ -317,7 +326,7 @@ object AppRepo {
             val t = start + r * (cell + gap)
             ca.drawRoundRect(RectF(l, t, l + cell, t + cell), cell * 0.3f, cell * 0.3f, dot)
         }
-        launchpadIcon = bake(a)
+        launchpadIcon = bake(a, shape)
 
         // Recientes: tres tarjetas apiladas.
         val b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
@@ -337,7 +346,7 @@ object AppRepo {
             val t = size * 0.2f + i * size * 0.16f
             cb.drawRoundRect(RectF(l, t, l + w, t + h), size * 0.07f, size * 0.07f, card)
         }
-        recentsIcon = bake(b)
+        recentsIcon = bake(b, shape)
     }
 
     // ---------------- Apps por defecto ----------------

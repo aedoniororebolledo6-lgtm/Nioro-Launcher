@@ -214,12 +214,12 @@ object IconShadow {
 
     private fun get(): Bitmap {
         var b = bmp
-        if (b != null && bmpShape != Prefs.iconShape) {
+        if (b != null && bmpShape != AppRepo.bakedShape) {
             bmp = null
             b = null
         }
         if (b == null) {
-            bmpShape = Prefs.iconShape
+            bmpShape = AppRepo.bakedShape
             val s = 96
             val pad = 24
             b = Bitmap.createBitmap(s + pad * 2, s + pad * 2, Bitmap.Config.ARGB_8888)
@@ -227,7 +227,7 @@ object IconShadow {
             c.translate(pad.toFloat(), pad.toFloat())
             val p = Paint(Paint.ANTI_ALIAS_FLAG)
             p.color = Color.BLACK
-            c.drawPath(AppRepo.shapePath(Prefs.iconShape, s.toFloat()), p)
+            c.drawPath(AppRepo.shapePath(maxOf(0, AppRepo.bakedShape), s.toFloat()), p)
             b = Blur.boxBlur(b, 7)
             bmp = b
         }
