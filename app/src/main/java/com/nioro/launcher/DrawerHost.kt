@@ -211,10 +211,13 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
         search.setText("")
         if (!isOpen) {
             isOpen = true
-            visibility = VISIBLE
-            v.progress = 0f
-            sp.snap(0f)
-            v.post { if (isOpen && view === v) v.onOpen() }
+            // si aún se estaba cerrando, la animación da la vuelta desde donde va (sin saltar a 0)
+            if (visibility != VISIBLE) {
+                visibility = VISIBLE
+                v.progress = 0f
+                sp.snap(0f)
+                v.post { if (isOpen && view === v) v.onOpen() }
+            }
             if (Prefs.drawerStyle == 4) Mo.tune(sp, S.MO_DRAWER_OPEN, 140f, 1f) else Mo.tune(sp, S.MO_DRAWER_OPEN, 230f, 0.82f)
             search.visibility = if (S.b(S.DR_SEARCH)) View.VISIBLE else View.GONE
             search.textSize = 16f * S.p(S.tp(S.TX_SEARCH, S.TP_SIZE))

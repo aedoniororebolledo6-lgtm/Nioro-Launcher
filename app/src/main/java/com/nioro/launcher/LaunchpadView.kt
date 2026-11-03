@@ -253,10 +253,12 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
                         mode = 3
                         listener?.onClose()
                     }
-                    // vuelve a su sitio con rebote (o acompaña el cierre)
-                    Mo.tune(pull, S.MO_DRAWER_CLOSE, 300f, 0.75f)
-                    pull.to(0f)
-                    ticker.kick()
+                    if (mode != 3) {
+                        // no llegó a cerrar: vuelve a su sitio con rebote
+                        Mo.tune(pull, S.MO_DRAWER_CLOSE, 300f, 0.75f)
+                        pull.to(0f)
+                        ticker.kick()
+                    }
                 } else if (mode == 0 && !moved && !longFired && up) {
                     if (downIdx >= 0) {
                         val r = RectF()

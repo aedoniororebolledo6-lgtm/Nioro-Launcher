@@ -235,7 +235,7 @@ class HomeView(ctx: Context) : View(ctx) {
     private val clockRun = object : Runnable {
         override fun run() {
             if (updateClock()) invalidate()
-            handler.postDelayed(this, 20000)
+            handler.postDelayed(this, msToNextMinute())
         }
     }
 
@@ -462,6 +462,11 @@ class HomeView(ctx: Context) : View(ctx) {
             val prev = old[s.kind.toString() + "|" + (s.key ?: "")]
             if (prev != null) {
                 copySpring(prev.gw, s.gw)
+                copySpring(prev.sc, s.sc)
+                copySpring(prev.by, s.by)
+                copySpring(prev.bs, s.bs)
+                copySpring(prev.br, s.br)
+                copySpring(prev.bx, s.bx)
             } else {
                 // icono nuevo (p. ej. las apps terminan de cargar al arrancar): crece desde pequeño con rebote
                 Mo.tune(s.gw, S.MO_DOCK_MAG, 240f, 0.42f)
@@ -527,8 +532,11 @@ class HomeView(ctx: Context) : View(ctx) {
     fun resumeClock() {
         handler.removeCallbacks(clockRun)
         if (updateClock()) invalidate()
-        handler.postDelayed(clockRun, 20000)
+        handler.postDelayed(clockRun, msToNextMinute())
     }
+
+    /** el reloj se despierta justo al empezar el minuto siguiente (antes podía llegar hasta 20 s tarde) */
+    private fun msToNextMinute(): Long = 60_000L - System.currentTimeMillis() % 60_000L + 40L
 
     fun pauseClock() {
         handler.removeCallbacks(clockRun)

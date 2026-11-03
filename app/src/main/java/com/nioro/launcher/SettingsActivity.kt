@@ -420,8 +420,10 @@ class SettingsActivity : Activity() {
                     tryStart(Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Fondo de pantalla"))
                 }
                 divider(k2, dp(60f))
-                button(k2, "Mostrar apps ocultas", Prefs.hidden().size.toString() + " ocultas", Glyphs.GRID) {
+                var hiddenSub: TextView? = null
+                hiddenSub = button(k2, "Mostrar apps ocultas", Prefs.hidden().size.toString() + " ocultas", Glyphs.GRID) {
                     Prefs.setHidden(emptyList())
+                    hiddenSub?.text = "0 ocultas"
                     toast("Apps visibles de nuevo")
                 }
                 divider(k2, dp(60f))
@@ -959,7 +961,8 @@ class SettingsActivity : Activity() {
         parent.addView(row)
     }
 
-    private fun button(parent: LinearLayout, title: String, sub: String?, glyph: Int, run: () -> Unit) {
+    /** fila con icono, título y subtítulo; devuelve el subtítulo para poder actualizarlo */
+    private fun button(parent: LinearLayout, title: String, sub: String?, glyph: Int, run: () -> Unit): TextView? {
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
         row.gravity = Gravity.CENTER_VERTICAL
@@ -973,13 +976,16 @@ class SettingsActivity : Activity() {
         texts.orientation = LinearLayout.VERTICAL
         texts.setPadding(dp(20f).toInt(), 0, dp(8f).toInt(), 0)
         texts.addView(text(title, 16.5f, 500))
+        var subView: TextView? = null
         if (sub != null) {
             val s = text(sub, 13.5f, 400, OneColors.SUB)
             s.setPadding(0, dp(2f).toInt(), 0, 0)
             texts.addView(s)
+            subView = s
         }
         row.addView(texts, LinearLayout.LayoutParams(0, -2, 1f))
         parent.addView(row)
+        return subView
     }
 
     private fun toggle(parent: LinearLayout, title: String, sub: String?, cur: Boolean, set: (Boolean) -> Unit) {
