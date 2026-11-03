@@ -104,6 +104,11 @@ class MainActivity : Activity() {
         else registerReceiver(pkgReceiver, f)
 
         reloadApps()
+        try {
+            (getSystemService(Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager).registerTorchCallback(torchCb, null)
+            torchReg = true
+        } catch (t: Throwable) {
+        }
     }
 
     private fun reloadApps() {
@@ -129,8 +134,8 @@ class MainActivity : Activity() {
                             for (e in fresh) if (e.key !in h && e.key !in d) h.add(e.key)
                             Prefs.setHomeKeys(h)
                         }
-                        Prefs.setKnownKeys(AppRepo.apps.map { it.key })
                     }
+                    Prefs.setKnownKeys(AppRepo.apps.map { it.key })
                 }
             }
             // limpiar apps desinstaladas (solo si la lista cargó bien, para no borrar el inicio por error)
@@ -165,7 +170,7 @@ class MainActivity : Activity() {
         drawer.styleChanged()
         if (wasStopped) {
             // Al volver (de una app, de Ajustes o al desbloquear) se releen los ajustes.
-            if (!Prefs.seeded || AppRepo.bakedShape != Prefs.iconShape || AppRepo.version != seenIcons) reloadApps() else {
+            if (!Prefs.seeded || AppRepo.bakedShape != Prefs.iconShape || AppRepo.bakedRes != S.i(S.P_ICON_RES) || AppRepo.version != seenIcons) reloadApps() else {
                 home.reload()
                 drawer.refreshData()
             }

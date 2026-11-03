@@ -151,6 +151,7 @@ object AppRepo {
                     apps = out
                     byKey = map
                     bakedShape = shape
+                    bakedRes = key % 10
                     version++
                     done()
                 }
@@ -164,6 +165,8 @@ object AppRepo {
     @Volatile var bakedShape = -1
         private set
     private var workerShape = -1
+    @Volatile var bakedRes = -1
+        private set
     /** sube cada vez que cambian los iconos (las vistas lo comparan para refrescarse) */
     var version = 0
         private set

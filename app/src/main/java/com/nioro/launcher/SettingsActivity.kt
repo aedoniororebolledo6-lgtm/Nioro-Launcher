@@ -700,9 +700,14 @@ class SettingsActivity : Activity() {
         val allSurf = S.SF_NAMES.indices
         fun glass(prop: Int, v: Float) { for (sf in allSurf) S.set(S.gp(sf, prop), v) }
         when (i) {
-            0 -> { // Liquid Glass (original)
-                S.reset(S.C_GLASS); S.reset(S.C_ICON); S.reset(S.C_COLOR)
+            0 -> { // Liquid Glass (original): deshace todos los temas
+                for (cat in intArrayOf(S.C_GLASS, S.C_ICON, S.C_COLOR, S.C_HOME, S.C_DOCK, S.C_CLOCK, S.C_MOTION, S.C_STYLE, S.C_PERF)) S.reset(cat)
                 Prefs.iconShape = 0
+                Prefs.clockStyle = 0
+                Prefs.labels = true
+                Prefs.saver = false
+                Prefs.dockMode = 0
+                Compat.applyRefreshRate(this)
             }
             1 -> { // One UI
                 Prefs.iconShape = 2

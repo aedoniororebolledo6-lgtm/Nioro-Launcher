@@ -228,7 +228,7 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
                 lastY = y
                 moved = false
                 longFired = false
-                onIndex = panel.contains(x, y) && x > panel.right - dp(34f)
+                onIndex = S.b(S.LIST_INDEX) && letters.size > 1 && panel.contains(x, y) && x > panel.right - dp(34f)
                 if (onIndex) {
                     jumpToIndex(y)
                     return true

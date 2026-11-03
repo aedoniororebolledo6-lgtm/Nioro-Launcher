@@ -560,7 +560,7 @@ object S {
         val base = defs.size
         for (g in G_NAMES.indices) {
             choice("gest.$g.a", "Acción", C_GESTURE, G_NAMES[g], ACTIONS, G_DEF[g])
-            bool("gest.$g.v", "Vibrar al hacerlo", C_GESTURE, G_NAMES[g], true)
+            bool("gest.$g.v", "Vibrar al hacerlo", C_GESTURE, G_NAMES[g], false)
         }
         base
     }
@@ -715,7 +715,7 @@ object S {
     val L_TOP_GRAD_S = num("col.topgrads", "Fuerza del degradado superior", C_COLOR, LG, 0f, 100f, 40f)
     val L_BOT_GRAD = bool("col.botgrad", "Degradado inferior (detrás del dock)", C_COLOR, LG, false)
     val L_BOT_GRAD_S = num("col.botgrads", "Fuerza del degradado inferior", C_COLOR, LG, 0f, 100f, 45f)
-    val L_SCRIM = color("col.scrim", "Color de fondo de los paneles", C_COLOR, LG, 2)
+    val L_SCRIM = color("col.scrim", "Color de fondo de los paneles", C_COLOR, LG, 0)
     val L_SETTINGS_BG = choice("col.setbg", "Fondo de los ajustes", C_COLOR, LG, arrayOf("Noche azul", "Morado", "Negro puro", "Océano", "Atardecer"), 0)
 
     // ==================================================================

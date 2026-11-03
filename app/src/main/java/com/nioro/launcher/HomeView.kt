@@ -709,8 +709,10 @@ class HomeView(ctx: Context) : View(ctx) {
 
     private fun refreshEditButtons() {
         editCount = 0
-        val on = booleanArrayOf(S.b(S.E_BTN_WALL), S.b(S.E_BTN_VIEW), S.b(S.E_BTN_MOTION), S.b(S.E_BTN_SETTINGS))
-        for (i in 0 until 4) if (on[i]) editVisible[editCount++] = i
+        if (S.b(S.E_BTN_WALL)) editVisible[editCount++] = 0
+        if (S.b(S.E_BTN_VIEW)) editVisible[editCount++] = 1
+        if (S.b(S.E_BTN_MOTION)) editVisible[editCount++] = 2
+        if (S.b(S.E_BTN_SETTINGS)) editVisible[editCount++] = 3
     }
 
     private fun editBtnCenter(slot: Int, out: FloatArray) {
@@ -1205,7 +1207,7 @@ class HomeView(ctx: Context) : View(ctx) {
                 return true
             }
             MotionEvent.ACTION_POINTER_DOWN -> {
-                if (ev.pointerCount == 2 && !inDock && (touchMode == M_NONE || touchMode == M_PAGE || touchMode == M_VSWIPE)) {
+                if (ev.pointerCount == 2 && !inDock && !vTriggered && (touchMode == M_NONE || touchMode == M_PAGE || touchMode == M_VSWIPE)) {
                     cancelLong()
                     if (touchMode == M_PAGE) settle(0f)
                     touchMode = M_MULTI
@@ -1219,7 +1221,7 @@ class HomeView(ctx: Context) : View(ctx) {
                 return true
             }
             MotionEvent.ACTION_POINTER_UP -> {
-                if (touchMode == M_MULTI) finishMulti()
+                if (touchMode == M_MULTI && ev.pointerCount == 2) finishMulti()
                 return true
             }
             MotionEvent.ACTION_MOVE -> {

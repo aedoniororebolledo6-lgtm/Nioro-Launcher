@@ -101,7 +101,7 @@ object IconFx {
     fun scale(area: Int): Float = S.p(S.ip(area, S.IP_SCALE))
     fun pressDepth(area: Int): Float = S.p(S.ip(area, S.IP_PRESS))
     /** rebote al soltar -> razón de amortiguación del resorte */
-    fun releaseRatio(area: Int): Float = lerp(1f, 0.25f, S.p(S.ip(area, S.IP_PRESS_BOUNCE)))
+    fun releaseRatio(area: Int): Float = lerp(1f, 0f, S.p(S.ip(area, S.IP_PRESS_BOUNCE))).coerceAtLeast(0.12f)
 
     private fun outlinePath(size: Float): Path {
         val shape = maxOf(0, AppRepo.bakedShape)

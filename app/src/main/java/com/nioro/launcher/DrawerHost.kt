@@ -171,13 +171,14 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
     }
 
     private fun rebuildScrim() {
-        val c = S.col(S.L_SCRIM, 0xFF060A18.toInt()) and 0x00FFFFFF
         val h = height.toFloat().coerceAtLeast(1f)
-        scrimShader = LinearGradient(
-            0f, 0f, 0f, h,
-            intArrayOf(c or 0xB3000000.toInt(), c or 0x8C000000.toInt(), c or 0xCC000000.toInt()),
-            floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP
-        )
+        val pick = S.col(S.L_SCRIM, 0)
+        // "Automático" = degradado original azul noche
+        val cols = if (pick == 0) intArrayOf(0xB3060A18.toInt(), 0x8C0A1230.toInt(), 0xCC050814.toInt()) else {
+            val c = pick and 0x00FFFFFF
+            intArrayOf(c or 0xB3000000.toInt(), c or 0x8C000000.toInt(), c or 0xCC000000.toInt())
+        }
+        scrimShader = LinearGradient(0f, 0f, 0f, h, cols, floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
     }
 
     /** Llamar cuando cambian los ajustes (estilo de vista, tamaños...). */
@@ -266,11 +267,7 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
         super.onSizeChanged(w, h, ow, oh)
-        scrimShader = LinearGradient(
-            0f, 0f, 0f, h.toFloat(),
-            intArrayOf(0xB3060A18.toInt(), 0x8C0A1230.toInt(), 0xCC050814.toInt()),
-            floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP
-        )
+        rebuildScrim()
     }
 
     override fun onDraw(c: Canvas) {

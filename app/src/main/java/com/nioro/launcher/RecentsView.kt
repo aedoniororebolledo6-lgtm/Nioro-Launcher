@@ -271,7 +271,6 @@ class RecentsView(ctx: Context) : View0(ctx) {
         hdr.set(rr.left + dp(16f) * k, rr.bottom - dp(46f) * k, rr.right - dp(60f) * k, rr.bottom - dp(34f) * k)
         c.drawRoundRect(hdr, dp(6f), dp(6f), card)
         val isz = min(rr.width() * 0.4f, dp(80f))
-        IconShadow.draw(c, rr.centerX(), rr.centerY(), isz, al)
         drawIcon(c, e, rr.centerX(), rr.centerY(), isz, al)
         // cabecera estilo iOS: icono pequeño + nombre encima de la tarjeta
         if (!S.b(S.RC_HEADER)) return
