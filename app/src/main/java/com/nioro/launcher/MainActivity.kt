@@ -149,7 +149,7 @@ class MainActivity : Activity() {
         drawer.styleChanged()
         if (wasStopped) {
             // Al volver (de una app, de Ajustes o al desbloquear) se releen los ajustes.
-            if (!Prefs.seeded) reloadApps() else {
+            if (!Prefs.seeded || AppRepo.bakedShape != Prefs.iconShape) reloadApps() else {
                 home.reload()
                 drawer.refreshData()
             }
