@@ -131,7 +131,7 @@ class MainActivity : Activity() {
                         if (S.b(S.H_AUTO_ADD)) {
                             val h = Prefs.homeKeys()
                             val d = Prefs.dockKeys()
-                            for (e in fresh) if (e.key !in h && e.key !in d) h.add(e.key)
+                            for (e in fresh) if (e.key !in h && e.key !in d) HomeSlots.add(h, e.key)
                             Prefs.setHomeKeys(h)
                         }
                     }
@@ -140,7 +140,8 @@ class MainActivity : Activity() {
             }
             // limpiar apps desinstaladas (solo si la lista cargó bien, para no borrar el inicio por error)
             if (AppRepo.apps.isNotEmpty()) {
-                Prefs.setHomeKeys(Prefs.homeKeys().filter { AppRepo.get(it) != null })
+                // una app desinstalada deja su hueco (los demás iconos no se mueven)
+                Prefs.setHomeKeys(Prefs.homeKeys().map { if (it == HomeSlots.BLANK || AppRepo.get(it) != null) it else HomeSlots.BLANK })
                 Prefs.setDockKeys(Prefs.dockKeys().filter { AppRepo.get(it) != null })
             }
             seenIcons = AppRepo.version
@@ -302,13 +303,15 @@ class MainActivity : Activity() {
         val dockKeys = Prefs.dockKeys()
         if (e.key in homeKeys) {
             items.add(MenuView.Item("Quitar del inicio", Glyphs.MINUS) {
-                Prefs.setHomeKeys(Prefs.homeKeys().filter { it != e.key })
+                val l = Prefs.homeKeys()
+                HomeSlots.remove(l, e.key)
+                Prefs.setHomeKeys(l)
                 home.reload()
             })
         } else if (e.key !in dockKeys) {
             items.add(MenuView.Item("Añadir al inicio", Glyphs.PLUS) {
                 val l = Prefs.homeKeys()
-                l.add(e.key)
+                HomeSlots.add(l, e.key)
                 Prefs.setHomeKeys(l)
                 home.reload()
                 Toast.makeText(this, "Añadida al inicio", Toast.LENGTH_SHORT).show()
@@ -324,7 +327,9 @@ class MainActivity : Activity() {
                 val l = Prefs.dockKeys()
                 l.add(e.key)
                 Prefs.setDockKeys(l)
-                Prefs.setHomeKeys(Prefs.homeKeys().filter { it != e.key })
+                val hk = Prefs.homeKeys()
+                HomeSlots.remove(hk, e.key)
+                Prefs.setHomeKeys(hk)
                 home.reload()
             })
         }
@@ -338,7 +343,9 @@ class MainActivity : Activity() {
             val h = Prefs.hidden()
             if (e.key !in h) h.add(e.key)
             Prefs.setHidden(h)
-            Prefs.setHomeKeys(Prefs.homeKeys().filter { it != e.key })
+            val hk = Prefs.homeKeys()
+            HomeSlots.remove(hk, e.key)
+            Prefs.setHomeKeys(hk)
             Prefs.setDockKeys(Prefs.dockKeys().filter { it != e.key })
             home.reload()
             drawer.refreshData()

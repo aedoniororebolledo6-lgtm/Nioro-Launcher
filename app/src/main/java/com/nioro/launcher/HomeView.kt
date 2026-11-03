@@ -301,7 +301,8 @@ class HomeView(ctx: Context) : View(ctx) {
     /** Vuelve a leer inicio y dock desde los ajustes guardados. */
     fun reload() {
         homeKeys = ArrayList()
-        for (k in Prefs.homeKeys()) if (AppRepo.get(k) != null && k !in homeKeys) homeKeys.add(k)
+        // los huecos se conservan; una app aún sin cargar también (no se dibuja hasta que exista)
+        for (k in Prefs.homeKeys()) if (k == HomeSlots.BLANK || k !in homeKeys) homeKeys.add(k)
         dockKeys = ArrayList()
         for (k in Prefs.dockKeys()) if (AppRepo.get(k) != null && k !in dockKeys) dockKeys.add(k)
         relayout()
@@ -326,11 +327,19 @@ class HomeView(ctx: Context) : View(ctx) {
         if (!isEditing && editSp.value <= 0.001f) return
         if (now) {
             editSp.snap(0f)
+            // si estaba en la tarjeta "Añadir pantalla", vuelve a la última pantalla real
+            val lastNow = (realPages() - 1).toFloat()
+            if (pageSp.value > lastNow) pageSp.snap(lastNow)
             invalidate()
             return
         }
         Mo.tune(editSp, S.MO_EDIT_OUT, 300f, 1f)
         editSp.to(0f)
+        val last = (realPages() - 1).toFloat()
+        if (pageSp.target > last) {
+            Mo.tune(pageSp, S.MO_PAGE, 220f, 0.84f)
+            pageSp.to(last)
+        }
         ticker.kick()
     }
 
@@ -357,9 +366,62 @@ class HomeView(ctx: Context) : View(ctx) {
     }
 
     // ---------------------------------------------------------------- Layout
-    private fun pageCount(): Int {
+    /** pantallas con contenido (o vacías añadidas a propósito) */
+    private fun realPages(): Int {
         val c = if (cap < 1) 1 else cap
         return max(1, ceil(homeKeys.size / c.toFloat()).toInt())
+    }
+
+    /** en el modo edición hay una pantalla más al final: la tarjeta "Añadir pantalla" */
+    private fun pageCount(): Int = realPages() + (if (isEditing) 1 else 0)
+
+    // ---------------------------------------------------------------- Pantallas en el modo edición
+    private val badgePaint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    /** pasa un toque de pantalla a coordenadas del contenido encogido del modo edición */
+    private fun editScale(): Float = 1f - (1f - S.p(S.E_SCALE)) * editSp.value
+    private fun toContentX(x: Float): Float = width / 2f + (x - width / 2f) / editScale()
+    private fun toContentY(y: Float): Float = editPivotY() + (y - editPivotY()) / editScale()
+
+    /** centro del botón "Quitar pantalla" (arriba a la derecha del marco) */
+    private fun removePageX(): Float = width - dp(10f) - dp(30f)
+    private fun removePageY(): Float = insetTop + dp(10f) + dp(30f)
+
+    /** añade una pantalla vacía al final */
+    private fun addPage() {
+        val c = max(1, cap)
+        while (homeKeys.size % c != 0) homeKeys.add(HomeSlots.BLANK)
+        repeat(c) { homeKeys.add(HomeSlots.BLANK) }
+        saveHome()
+        Hx.fire(this, S.HE_SETTING)
+        android.widget.Toast.makeText(context, "Pantalla añadida", android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    /** quita la pantalla [pg] con sus iconos (las apps siguen en la vista de apps) */
+    private fun removePage(pg: Int) {
+        if (realPages() <= 1) return
+        val c = max(1, cap)
+        val from = pg * c
+        val to = min(homeKeys.size, from + c)
+        var apps = 0
+        for (i in from until to) if (homeKeys[i] != HomeSlots.BLANK) apps++
+        for (i in to - 1 downTo from) homeKeys.removeAt(i)
+        saveHome()
+        val last = (realPages() - 1).toFloat()
+        if (pageSp.target > last) {
+            Mo.tune(pageSp, S.MO_PAGE, 220f, 0.84f)
+            pageSp.to(last)
+        }
+        Hx.fire(this, S.HE_SETTING)
+        val msg = if (apps == 0) "Pantalla quitada" else "Pantalla quitada · sus apps siguen en la vista de apps"
+        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    private fun saveHome() {
+        Prefs.setHomeKeys(homeKeys)
+        relayout()
+        ticker.kick()
+        invalidate()
     }
 
     private fun relayout() {
@@ -971,6 +1033,24 @@ class HomeView(ctx: Context) : View(ctx) {
             if (ed > 0.001f) {
                 tmpRect.set(dp(10f), insetTop + dp(10f), w - dp(10f), dotsY + dp(18f))
                 glass.draw(c, tmpRect, dp(34f), clamp01(ed) * 0.75f * pageAlpha, false, S.SF_EDIT_FRAME)
+                val ea = clamp01(ed) * pageAlpha
+                if (pg >= realPages()) {
+                    // tarjeta "Añadir pantalla"
+                    val cx = tmpRect.centerX()
+                    val cy = tmpRect.centerY()
+                    capRect.set(cx - dp(44f), cy - dp(44f), cx + dp(44f), cy + dp(44f))
+                    glass.draw(c, capRect, dp(44f), ea, true, S.SF_EDIT_BTN)
+                    Glyphs.draw(c, Glyphs.PLUS, cx, cy, dp(40f), Color.WHITE, ea)
+                    editLabel.alpha = Tx.alpha(S.TX_EDIT, ea)
+                    c.drawText(Tx.str(S.TX_EDIT, "Añadir pantalla"), cx, cy + dp(72f), editLabel)
+                } else if (realPages() > 1) {
+                    // botón "Quitar pantalla"
+                    val bx = removePageX()
+                    val by = removePageY()
+                    capRect.set(bx - dp(19f), by - dp(19f), bx + dp(19f), by + dp(19f))
+                    glass.draw(c, capRect, dp(19f), ea, true, S.SF_EDIT_BTN)
+                    Glyphs.draw(c, Glyphs.TRASH, bx, by, dp(20f), Color.WHITE, ea)
+                }
             }
             val start = pg * cap
             val end = min(homeKeys.size, start + cap)
@@ -999,6 +1079,16 @@ class HomeView(ctx: Context) : View(ctx) {
                     al *= itx.alpha
                 }
                 drawIconAt(c, e, cx, cy, iconPx * sc, al, true)
+                if (ed > 0.01f) {
+                    // botón "−" para quitar el icono del inicio
+                    val ba = clamp01(ed * 1.4f - 0.3f) * al
+                    val bx = cx - iconPx * sc / 2f + dp(3f)
+                    val by = cy - iconPx * sc / 2f + dp(3f)
+                    badgePaint.color = Color.WHITE
+                    badgePaint.alpha = (235 * ba).toInt().coerceIn(0, 255)
+                    c.drawCircle(bx, by, dp(11f) * lerp(0.5f, 1f, clamp01(ed)), badgePaint)
+                    Glyphs.draw(c, Glyphs.MINUS, bx, by, dp(16f), 0xFF1B2440.toInt(), ba)
+                }
             }
             c.restore()
         }
@@ -1189,7 +1279,10 @@ class HomeView(ctx: Context) : View(ctx) {
         val row = ((y - gridTop) / cellH).toInt()
         if (col !in 0 until cols || row !in 0 until rows || y < gridTop) return null
         val idx = pg * cap + row * cols + col
-        return if (idx in 0 until homeKeys.size) homeKeys[idx] else null
+        if (idx !in 0 until homeKeys.size) return null
+        val k = homeKeys[idx]
+        // un hueco (o una app que ya no existe) es fondo vacío
+        return if (k == HomeSlots.BLANK || AppRepo.get(k) == null) null else k
     }
 
     private fun dockKeyAt(x: Float): String? {
@@ -1197,12 +1290,12 @@ class HomeView(ctx: Context) : View(ctx) {
         return s.key
     }
 
+    /** celda bajo el dedo (puede estar más allá del final de la lista: una celda vacía) */
     private fun dropIndex(x: Float, y: Float): Int {
-        if (homeKeys.isEmpty()) return -1
-        val pg = pageSp.value.roundToInt()
+        val pg = pageSp.value.roundToInt().coerceIn(0, realPages() - 1)
         val col = ((x - gridLeft) / cellW).toInt().coerceIn(0, cols - 1)
         val row = ((y - gridTop) / cellH).toInt().coerceIn(0, rows - 1)
-        return min(pg * cap + row * cols + col, homeKeys.size - 1)
+        return pg * cap + row * cols + col
     }
 
     private fun cancelLong() {
@@ -1282,10 +1375,12 @@ class HomeView(ctx: Context) : View(ctx) {
                 } else if (!moved && ev.actionMasked == MotionEvent.ACTION_UP) {
                     if (pageSp.value != pageSp.value.roundToInt().toFloat()) settle(0f)
                     val b = editBtnAt(x, y)
-                    exitEdit()
                     if (b >= 0) {
+                        exitEdit()
                         Hx.fire(this, S.HE_PANEL)
                         host?.editAction(b)
+                    } else if (!editContentTap(x, y)) {
+                        exitEdit()
                     }
                 }
                 vt?.recycle()
@@ -1293,6 +1388,41 @@ class HomeView(ctx: Context) : View(ctx) {
             }
         }
         return true
+    }
+
+    /** toque dentro de las pantallas encogidas: añadir pantalla, quitar pantalla o quitar un icono */
+    private fun editContentTap(x: Float, y: Float): Boolean {
+        val cx = toContentX(x)
+        val cy = toContentY(y)
+        val pg = pageSp.value.roundToInt()
+        if (cy < insetTop || cy > dotsY + dp(18f)) return false
+        if (pg >= realPages()) {
+            addPage()
+            return true
+        }
+        if (realPages() > 1 && hypot(cx - removePageX(), cy - removePageY()) < dp(26f)) {
+            removePage(pg)
+            return true
+        }
+        // botón "−" de un icono (zona generosa alrededor de la esquina)
+        val start = pg * cap
+        val end = min(homeKeys.size, start + cap)
+        for (idx in start until end) {
+            val k = homeKeys[idx]
+            if (k == HomeSlots.BLANK || AppRepo.get(k) == null) continue
+            val local = idx - start
+            val ix = gridLeft + (local % cols) * cellW + cellW / 2f
+            val iy = iconCenterY(local / cols)
+            val bx = ix - iconPx / 2f + dp(3f)
+            val by = iy - iconPx / 2f + dp(3f)
+            if (hypot(cx - bx, cy - by) < dp(22f)) {
+                homeKeys[idx] = HomeSlots.BLANK
+                saveHome()
+                Hx.fire(this, S.HE_SETTING)
+                return true
+            }
+        }
+        return false
     }
 
     override fun onTouchEvent(ev: MotionEvent): Boolean {
@@ -1569,25 +1699,33 @@ class HomeView(ctx: Context) : View(ctx) {
         val key = dragKey ?: return
         if (!dragFromDock) {
             if (y < insetTop + dp(80f) && S.b(S.H_REMOVE_DRAG)) {
-                homeKeys.remove(key)
+                HomeSlots.remove(homeKeys, key)
             } else if (S.b(S.K_SHOW) && y > dockTopY() - dp(4f)) {
                 if (key !in dockKeys && dockKeys.size < S.i(S.K_MAX)) {
                     dockKeys.add(key)
-                    homeKeys.remove(key)
+                    HomeSlots.remove(homeKeys, key)
                 }
             } else {
                 val to = dropIndex(x, y)
                 val from = homeKeys.indexOf(key)
-                if (from >= 0 && to >= 0) {
-                    homeKeys.removeAt(from)
-                    homeKeys.add(min(to, homeKeys.size), key)
+                if (from >= 0 && to >= 0 && to != from) {
+                    while (homeKeys.size <= to) homeKeys.add(HomeSlots.BLANK)
+                    val there = homeKeys[to]
+                    if (there == HomeSlots.BLANK || AppRepo.get(there) == null) {
+                        // celda vacía: el icono se pone ahí y deja su hueco
+                        homeKeys[to] = key
+                        homeKeys[from] = HomeSlots.BLANK
+                    } else {
+                        homeKeys.removeAt(from)
+                        homeKeys.add(min(to, homeKeys.size), key)
+                    }
                 }
             }
         } else {
             if (y < dockTopY() - dp(70f)) {
                 dockKeys.remove(key)
                 // al sacarla del dock vuelve al inicio (no se pierde)
-                if (key !in homeKeys) homeKeys.add(key)
+                if (key !in homeKeys) HomeSlots.add(homeKeys, key)
             } else {
                 val from = dockKeys.indexOf(key)
                 var best = from

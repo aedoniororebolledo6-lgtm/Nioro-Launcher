@@ -1331,6 +1331,10 @@ class GridPreview(ctx: Context) : View(ctx) {
         val keys = Prefs.homeKeys()
         var n = 0
         for (row in 0 until rows) for (col in 0 until cols) {
+            if (n < keys.size && keys[n] == HomeSlots.BLANK) {
+                n++
+                continue
+            }
             val cx = r.left + cw * (col + 0.5f)
             val cy = top + ch * (row + 0.5f) - labelH / 2f
             val e = if (n < keys.size) AppRepo.get(keys[n]) else if (apps.isNotEmpty()) apps[(n * 5) % apps.size] else null
