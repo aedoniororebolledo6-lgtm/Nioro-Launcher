@@ -632,6 +632,7 @@ object S {
     val CK_DX = num("clock.dx", "Posición horizontal", C_CLOCK, CG, -180f, 180f, 0f, " dp")
     val CK_SCALE = num("clock.scale", "Tamaño del reloj", C_CLOCK, CG, 50f, 200f, 100f)
     val CK_ZERO = choice("clock.zero", "Cero a la izquierda en la hora", C_CLOCK, CG, arrayOf("Automático", "Siempre (09:05)", "Nunca (9:05)"), 0)
+    val CK_ZONE2 = choice("clock.zone2", "Segunda ciudad (diseño Doble zona)", C_CLOCK, CG, ClockFaces.ZONE_NAMES, 0)
     val CK_SEPCH = choice("clock.sepch", "Separador", C_CLOCK, CG, arrayOf("Dos puntos  12:30", "Punto medio  12·30"), 0)
 
     // ==================================================================
