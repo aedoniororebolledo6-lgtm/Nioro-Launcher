@@ -81,6 +81,21 @@ class HomeView(ctx: Context) : View(ctx) {
     private var tickSlot: Slot? = null
     private var datePillW = 0f
     private val editSp = SpringValue(0f, 260f, 26f, 0.0008f)
+    /** icono arrastrado: se levanta (0 -> 1) y se inclina según hacia dónde se mueve */
+    private val dragLift = SpringValue(0f, 420f, 24f, 0.002f)
+    private val dragTilt = SpringValue(0f, 260f, 18f, 0.05f)
+    /** hueco de destino al arrastrar: se desliza de una celda a otra */
+    private val dropX = SpringValue(0f, 520f, 36f, 0.3f)
+    private val dropY = SpringValue(0f, 520f, 36f, 0.3f)
+    private var dropShown = false
+    /** cambio de minuto: el número viejo sube y se va, el nuevo entra desde abajo */
+    private val clockSp = SpringValue(1f, 160f, 22f, 0.002f)
+    private var prevTime = ""
+    private var prevHour = ""
+    private var prevMin = ""
+    /** los puntos de página se iluminan mientras se desliza */
+    private val dotsBoost = SpringValue(0f, 300f, 30f, 0.002f)
+    private val extraSprings = arrayOf(dragLift, dragTilt, dropX, dropY, clockSp, dotsBoost)
     private var hourStr = ""
     private var minStr = ""
     private val stackPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
@@ -245,6 +260,7 @@ class HomeView(ctx: Context) : View(ctx) {
         ticker.add(enterSp)
         ticker.add(pressSp)
         ticker.add(editSp)
+        for (x in extraSprings) ticker.add(x)
         stackPaint.color = Color.WHITE
         stackPaint.textSize = dp(96f)
         stackPaint.typeface = Typeface.create(Typeface.DEFAULT, 300, false)
@@ -438,6 +454,7 @@ class HomeView(ctx: Context) : View(ctx) {
         ticker.springs.add(pressSp)
         ticker.springs.add(editSp)
         ticker.springs.add(dockShrink)
+        for (x in extraSprings) ticker.springs.add(x)
         pressSlot = null
         tickSlot = null
         var grew = false
@@ -541,11 +558,23 @@ class HomeView(ctx: Context) : View(ctx) {
             else -> DateFormat.is24HourFormat(context)
         }
         val tp = if (is24) "HH:mm" else if (S.b(S.CK_AMPM)) "h:mm a" else "h:mm"
+        val oldTime = timeStr
+        val oldHour = hourStr
+        val oldMin = minStr
         timeStr = SimpleDateFormat(tp, loc).format(d)
         if (!S.b(S.CK_BLINK)) timeStr = timeStr.replace(':', ' ')
         timeStr = Tx.str(S.TX_CLOCK, timeStr)
         hourStr = SimpleDateFormat(if (is24) "HH" else "hh", loc).format(d)
         minStr = SimpleDateFormat("mm", loc).format(d)
+        if (oldTime.isNotEmpty() && oldTime != timeStr) {
+            prevTime = oldTime
+            prevHour = oldHour
+            prevMin = oldMin
+            Mo.tune(clockSp, S.MO_PAGE, 160f, 0.8f)
+            clockSp.snap(0f)
+            clockSp.to(1f)
+            ticker.kick()
+        }
         val dp0 = when (S.i(S.DT_FORMAT)) {
             1 -> DateFormat.getBestDateTimePattern(loc, "EEEdMMM")
             2 -> "dd/MM"
@@ -621,6 +650,8 @@ class HomeView(ctx: Context) : View(ctx) {
 
     private fun onFrame(dt: Float): Boolean {
         if (scrubbing) updateDockTargets()
+        // la inclinación del icono arrastrado vuelve sola a 0 cuando el dedo se para
+        if (touchMode == M_DRAG && abs(dragTilt.target) > 0.05f) dragTilt.to(dragTilt.target * 0.82f)
         if (!pressSp.active && pressSp.target >= 1f) {
             pressKey = null
             pressSlot = null
@@ -830,11 +861,11 @@ class HomeView(ctx: Context) : View(ctx) {
                 c.drawText(greetStr, x, insetTop + dp(26f) + dy + Tx.dy(S.TX_GREETING), greetPaint)
             }
             stackPaint.textAlign = sal
-            stackPaint.alpha = Tx.alpha(S.TX_HOURS, a)
-            c.drawText(hourStr, x, insetTop + dp(100f) + gOff + dy + Tx.dy(S.TX_HOURS), stackPaint)
+            val hy = insetTop + dp(100f) + gOff + dy + Tx.dy(S.TX_HOURS)
+            rollText(c, stackPaint, hourStr, prevHour, x, hy, Tx.alpha(S.TX_HOURS, a))
             minPaint.textAlign = sal
-            minPaint.alpha = Tx.alpha(S.TX_MINUTES, a * 0.82f)
-            c.drawText(minStr, x, insetTop + dp(184f) + gOff + dy + Tx.dy(S.TX_MINUTES), minPaint)
+            val my = insetTop + dp(184f) + gOff + dy + Tx.dy(S.TX_MINUTES)
+            rollText(c, minPaint, minStr, prevMin, x, my, Tx.alpha(S.TX_MINUTES, a * 0.82f))
             clockRect.set(if (sal == Paint.Align.LEFT) x else x - dp(150f), insetTop + dp(20f) + gOff + dy, if (sal == Paint.Align.LEFT) x + dp(150f) else x, insetTop + dp(190f) + gOff + dy)
             if (S.b(S.DT_SHOW)) {
                 datePaint.textAlign = sal
@@ -854,9 +885,8 @@ class HomeView(ctx: Context) : View(ctx) {
             c.drawText(greetStr, cx, insetTop + dp(26f) + dy + Tx.dy(S.TX_GREETING), greetPaint)
         }
         clockPaint.textAlign = al
-        clockPaint.alpha = Tx.alpha(S.TX_CLOCK, a)
         val ty = insetTop + dp(88f) + gOff + dy + Tx.dy(S.TX_CLOCK)
-        c.drawText(timeStr, cx, ty, clockPaint)
+        rollText(c, clockPaint, timeStr, prevTime, cx, ty, Tx.alpha(S.TX_CLOCK, a))
         val cw = clockPaint.measureText(timeStr)
         val cl = when (al) { Paint.Align.LEFT -> cx; Paint.Align.RIGHT -> cx - cw; else -> cx - cw / 2f }
         clockRect.set(cl, ty - clockPaint.textSize * 0.8f, cl + cw, ty + dp(4f))
@@ -872,6 +902,22 @@ class HomeView(ctx: Context) : View(ctx) {
         val tx = when (al) { Paint.Align.LEFT -> pl + dp(15f); Paint.Align.RIGHT -> pl + datePillW - dp(15f); else -> cx }
         c.drawText(dateStr, tx, py + dp(20.5f) + Tx.dy(S.TX_DATE), datePaint)
         datePaint.textAlign = Paint.Align.CENTER
+    }
+
+    /** dibuja [now]; durante el cambio de minuto [old] sube desvaneciéndose y [now] entra desde abajo */
+    private fun rollText(c: Canvas, p: Paint, now: String, old: String, x: Float, y: Float, alpha: Int) {
+        val q = clockSp.value
+        if (q >= 0.999f || old.isEmpty() || old == now) {
+            p.alpha = alpha
+            c.drawText(now, x, y, p)
+            return
+        }
+        val d = p.textSize * 0.28f
+        p.alpha = (alpha * clamp01(1f - q * 1.4f)).toInt()
+        c.drawText(old, x, y - d * clamp01(q), p)
+        p.alpha = (alpha * clamp01(q * 1.3f)).toInt()
+        c.drawText(now, x, y + d * (1f - q), p)
+        p.alpha = alpha
     }
 
     private fun labelOf(e: AppEntry): String {
@@ -957,14 +1003,22 @@ class HomeView(ctx: Context) : View(ctx) {
                 if (local in 0 until cap) {
                     val col = local % cols
                     val row = local / cols
-                    tmpRect.set(
-                        gridLeft + col * cellW + dp(6f), gridTop + row * cellH + dp(4f),
-                        gridLeft + (col + 1) * cellW - dp(6f), gridTop + (row + 1) * cellH - dp(4f)
-                    )
+                    val tx = gridLeft + col * cellW + dp(6f)
+                    val ty = gridTop + row * cellH + dp(4f)
+                    if (!dropShown) {
+                        dropX.snap(tx)
+                        dropY.snap(ty)
+                        dropShown = true
+                    } else if (dropX.target != tx || dropY.target != ty) {
+                        dropX.to(tx)
+                        dropY.to(ty)
+                        ticker.kick()
+                    }
+                    tmpRect.set(dropX.value, dropY.value, dropX.value + cellW - dp(12f), dropY.value + cellH - dp(8f))
                     glass.draw(c, tmpRect, dp(20f), 0.45f, false, S.SF_DROP)
-                }
-            }
-        }
+                } else dropShown = false
+            } else dropShown = false
+        } else dropShown = false
     }
 
     private fun drawDots(c: Canvas) {
@@ -978,7 +1032,8 @@ class HomeView(ctx: Context) : View(ctx) {
         val x0 = width / 2f - (n - 1) * gap / 2f
         val style = S.i(S.D_STYLE)
         val act = S.col(S.D_COLOR, Color.WHITE)
-        val idle = S.p(S.D_IDLE)
+        // mientras se desliza entre páginas los puntos inactivos se ven más
+        val idle = lerp(S.p(S.D_IDLE), 0.75f, dotsBoost.value)
         if (style == 4) {
             tmpRect.set(x0 - dp(14f) * k, y - dp(11f) * k, x0 + (n - 1) * gap + dp(14f) * k, y + dp(11f) * k)
             glass.draw(c, tmpRect, dp(11f) * k, 0.7f, false, S.SF_DOTS)
@@ -1009,6 +1064,13 @@ class HomeView(ctx: Context) : View(ctx) {
                 2 -> {
                     val r = dp(3.2f) * k
                     val ww = r + near * dp(6f) * k
+                    tmpRect.set(x - ww, y - r, x + ww, y + r)
+                    c.drawRoundRect(tmpRect, r, r, dotPaint)
+                }
+                4 -> {
+                    // píldora One UI: el punto activo se estira en una cápsula
+                    val r = lerp(dp(3f), dp(3.6f), near) * k
+                    val ww = r + near * dp(4.5f) * k
                     tmpRect.set(x - ww, y - r, x + ww, y + r)
                     c.drawRoundRect(tmpRect, r, r, dotPaint)
                 }
@@ -1101,10 +1163,15 @@ class HomeView(ctx: Context) : View(ctx) {
             hintPaint.textAlign = Paint.Align.CENTER
             c.drawText("Quitar", tmpRect.centerX(), tmpRect.centerY() + dp(5f), hintPaint)
         }
-        val size = (if (dragFromDock) dockIconPx else iconPx) * 1.22f
-        tmpRect.set(dragX - size * 0.62f, dragY - size * 0.62f - dp(14f), dragX + size * 0.62f, dragY + size * 0.62f - dp(14f))
-        glass.draw(c, tmpRect, size * 0.5f, 0.35f, false, S.SF_DRAG)
-        drawIconAt(c, e, dragX, dragY - dp(14f), size, 1f, false)
+        val lift = dragLift.value
+        val size = (if (dragFromDock) dockIconPx else iconPx) * lerp(1f, 1.22f, lift)
+        val cy = dragY - dp(14f) * lift
+        c.save()
+        c.rotate(dragTilt.value, dragX, cy)
+        tmpRect.set(dragX - size * 0.62f, cy - size * 0.62f, dragX + size * 0.62f, cy + size * 0.62f)
+        glass.draw(c, tmpRect, size * 0.5f, 0.35f * clamp01(lift), false, S.SF_DRAG)
+        drawIconAt(c, e, dragX, cy, size, 1f, false)
+        c.restore()
     }
 
     // ---------------------------------------------------------------- Tacto
@@ -1286,6 +1353,9 @@ class HomeView(ctx: Context) : View(ctx) {
                 }
                 when (touchMode) {
                     M_DRAG -> {
+                        // se inclina hacia donde se mueve, como si tuviera peso
+                        dragTilt.to(((x - dragX) * 0.9f).coerceIn(-14f, 14f))
+                        ticker.kick()
                         dragX = x
                         dragY = y
                         val dir = if (!dragFromDock && x < dp(30f)) -1 else if (!dragFromDock && x > width - dp(30f)) 1 else 0
@@ -1333,6 +1403,10 @@ class HomeView(ctx: Context) : View(ctx) {
                         touchMode = if (abs(dx) > abs(dy)) M_PAGE else M_VSWIPE
                     }
                     if (touchMode == M_PAGE) {
+                        if (dotsBoost.target < 1f) {
+                            dotsBoost.to(1f)
+                            ticker.kick()
+                        }
                         setPageDrag(pageStart - dx / width)
                         invalidate()
                     } else if (touchMode == M_VSWIPE && !vTriggered) {
@@ -1370,6 +1444,11 @@ class HomeView(ctx: Context) : View(ctx) {
                     else -> {}
                 }
                 touchMode = M_NONE
+                dropShown = false
+                if (dotsBoost.target > 0f) {
+                    Mo.tune(dotsBoost, S.MO_PAGE, 120f, 1f)
+                    dotsBoost.to(0f)
+                }
                 endScrub()
                 vt?.recycle()
                 vt = null
@@ -1468,6 +1547,12 @@ class HomeView(ctx: Context) : View(ctx) {
         dragY = y
         touchMode = M_DRAG
         scrubbing = false
+        dropShown = false
+        Mo.tune(dragLift, S.MO_PRESS, 420f, 0.55f)
+        dragLift.snap(0f)
+        dragLift.to(1f)
+        dragTilt.snap(0f)
+        ticker.kick()
         Hx.fire(this, S.HE_LONG)
         invalidate()
     }

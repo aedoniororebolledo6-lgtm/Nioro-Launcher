@@ -301,12 +301,12 @@ class MainActivity : Activity() {
         val homeKeys = Prefs.homeKeys()
         val dockKeys = Prefs.dockKeys()
         if (e.key in homeKeys) {
-            items.add(MenuView.Item("Quitar del inicio") {
+            items.add(MenuView.Item("Quitar del inicio", Glyphs.MINUS) {
                 Prefs.setHomeKeys(Prefs.homeKeys().filter { it != e.key })
                 home.reload()
             })
         } else if (e.key !in dockKeys) {
-            items.add(MenuView.Item("Añadir al inicio") {
+            items.add(MenuView.Item("Añadir al inicio", Glyphs.PLUS) {
                 val l = Prefs.homeKeys()
                 l.add(e.key)
                 Prefs.setHomeKeys(l)
@@ -315,12 +315,12 @@ class MainActivity : Activity() {
             })
         }
         if (e.key in dockKeys) {
-            items.add(MenuView.Item("Quitar del dock") {
+            items.add(MenuView.Item("Quitar del dock", Glyphs.MINUS) {
                 Prefs.setDockKeys(Prefs.dockKeys().filter { it != e.key })
                 home.reload()
             })
         } else if (dockKeys.size < S.i(S.K_MAX)) {
-            items.add(MenuView.Item("Añadir al dock") {
+            items.add(MenuView.Item("Añadir al dock", Glyphs.DOCK) {
                 val l = Prefs.dockKeys()
                 l.add(e.key)
                 Prefs.setDockKeys(l)
@@ -328,13 +328,13 @@ class MainActivity : Activity() {
                 home.reload()
             })
         }
-        if (S.b(S.M_INFO)) items.add(MenuView.Item("Información de la app") {
+        if (S.b(S.M_INFO)) items.add(MenuView.Item("Información de la app", Glyphs.INFO) {
             try {
                 startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + e.pkg)))
             } catch (t: Throwable) {
             }
         })
-        if (S.b(S.M_HIDE)) items.add(MenuView.Item("Ocultar") {
+        if (S.b(S.M_HIDE)) items.add(MenuView.Item("Ocultar", Glyphs.HIDE) {
             val h = Prefs.hidden()
             if (e.key !in h) h.add(e.key)
             Prefs.setHidden(h)
@@ -344,14 +344,14 @@ class MainActivity : Activity() {
             drawer.refreshData()
             Toast.makeText(this, "Oculta. Recupérala en Ajustes del launcher.", Toast.LENGTH_SHORT).show()
         })
-        if (S.b(S.M_UNINSTALL)) items.add(MenuView.Item("Desinstalar") {
+        if (S.b(S.M_UNINSTALL)) items.add(MenuView.Item("Desinstalar", Glyphs.TRASH) {
             try {
                 @Suppress("DEPRECATION")
                 startActivity(Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:" + e.pkg)))
             } catch (t: Throwable) {
             }
         })
-        menu.show(e.label, anchor, items)
+        menu.show(e.label, anchor, items, e.icon)
     }
 
     // ---------------------------------------------------------------- Gestos
@@ -442,17 +442,17 @@ class MainActivity : Activity() {
 
     private fun homeMenu(x: Float, y: Float) {
         val items = ArrayList<MenuView.Item>()
-        items.add(MenuView.Item("Ajustes del launcher") {
+        items.add(MenuView.Item("Ajustes del launcher", Glyphs.GEAR) {
             startActivity(Intent(this, SettingsActivity::class.java))
             overridePendingTransition(R.anim.slide_up_in, R.anim.stay)
         })
-        items.add(MenuView.Item("Fondo de pantalla") {
+        items.add(MenuView.Item("Fondo de pantalla", Glyphs.WALLPAPER) {
             try {
                 startActivity(Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Fondo de pantalla"))
             } catch (t: Throwable) {
             }
         })
-        items.add(MenuView.Item("Vista de apps: siguiente estilo") {
+        items.add(MenuView.Item("Vista de apps: siguiente estilo", Glyphs.GRID) {
             Prefs.drawerStyle = (Prefs.drawerStyle + 1) % 5
             drawer.styleChanged()
             Toast.makeText(this, "Vista: " + SettingsActivity.DRAWER[Prefs.drawerStyle], Toast.LENGTH_SHORT).show()

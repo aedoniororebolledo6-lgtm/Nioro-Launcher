@@ -180,11 +180,14 @@ class SettingsActivity : Activity() {
             val w = stack.width.toFloat().coerceAtLeast(1f)
             v.translationX = w
             v.animate().translationX(0f).setDuration(420).setInterpolator(ease).withEndAction { navBusy = false }.start()
-            prev.animate().translationX(-w * 0.28f).alpha(0f).setDuration(420).setInterpolator(ease)
+            // la página de atrás se aleja (se encoge) mientras la nueva entra: da profundidad
+            prev.animate().translationX(-w * 0.28f).alpha(0f).scaleX(0.94f).scaleY(0.94f).setDuration(420).setInterpolator(ease)
                 .withEndAction { prev.visibility = View.INVISIBLE }.start()
         } else if (prev != null) {
             prev.translationX = -stack.width * 0.28f
             prev.alpha = 0f
+            prev.scaleX = 0.94f
+            prev.scaleY = 0.94f
             prev.visibility = View.INVISIBLE
         }
     }
@@ -203,7 +206,7 @@ class SettingsActivity : Activity() {
                 stack.removeView(top)
                 navBusy = false
             }.start()
-        prev.animate().translationX(0f).alpha(1f).setDuration(380).setInterpolator(ease).start()
+        prev.animate().translationX(0f).alpha(1f).scaleX(1f).scaleY(1f).setDuration(380).setInterpolator(ease).start()
         heroStatus?.invoke()
     }
 
@@ -1081,6 +1084,11 @@ class SettingsActivity : Activity() {
                 set(i)
                 paint(i)
                 Hx.fire(it, S.HE_SETTING)
+                // la ficha elegida se hunde y rebota
+                it.animate().cancel()
+                it.scaleX = 0.9f
+                it.scaleY = 0.9f
+                it.animate().scaleX(1f).scaleY(1f).setInterpolator(android.view.animation.OvershootInterpolator(3f)).setDuration(320).start()
                 pv?.let { p -> p.style = i; p.play() }
             }
         }

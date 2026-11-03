@@ -41,6 +41,8 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
     private var downIdx = -1
     private var longFired = false
     private var wasMoving = false
+    private var atTop = false
+    private var closing = false
     private var vt: VelocityTracker? = null
     private val longRun = Runnable {
         if (!moved && downIdx in shown.indices) {
@@ -89,7 +91,11 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
         layout()
     }
 
+    /** "Aplicaciones · 87" o "3 resultados" mientras se busca */
+    private var titleText = "Aplicaciones"
+
     override fun onDataChanged() {
+        titleText = if (query.isEmpty()) "Aplicaciones · " + shown.size else shown.size.toString() + (if (shown.size == 1) " resultado" else " resultados")
         layout()
         scroll.jump(0f)
     }
@@ -130,7 +136,9 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
         nub.alpha = (70 * a).toInt()
         if (S.b(S.GRID_NUB)) c.drawPath(nubPath, nub)
         title.alpha = (255 * a).toInt().coerceIn(0, 255)
-        if (S.b(S.GRID_TITLE)) c.drawText("Aplicaciones", panel.left + dp(22f), panel.top + dp(36f), title)
+        if (S.b(S.GRID_TITLE)) {
+            c.drawText(titleText, panel.left + dp(22f), panel.top + dp(36f), title)
+        }
 
         c.save()
         c.clipRect(panel.left + dp(4f), areaTop, panel.right - dp(4f), areaBottom)
@@ -171,6 +179,8 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
                 vt?.addMovement(ev)
                 wasMoving = scroll.isMoving
                 scroll.stop()
+                atTop = scroll.value <= scroll.min + 1f
+                closing = false
                 downX = x
                 downY = y
                 lastY = y
@@ -192,6 +202,11 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
                 unpress()
                 }
                 if (moved) {
+                    // desde arriba del todo, tirar hacia abajo cierra la vista
+                    if (atTop && !closing && S.b(S.DR_SWIPE_CLOSE) && y - downY > dp(120f) && abs(y - downY) > abs(x - downX) * 1.4f) {
+                        closing = true
+                        listener?.onClose()
+                    }
                     scroll.drag(-(y - lastY))
                     invalidate()
                 }

@@ -54,6 +54,10 @@ object Glyphs {
     const val CHECK = 14
     const val BACK = 15
     const val CLOCK = 16
+    const val TRASH = 17
+    const val HIDE = 18
+    const val PLUS = 19
+    const val MINUS = 20
 
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
     private val path = Path()
@@ -159,6 +163,25 @@ object Glyphs {
                 c.drawCircle(12f, 12f, 8.5f, p)
                 path.moveTo(12f, 7.5f); path.lineTo(12f, 12f); path.lineTo(15.5f, 14f)
                 c.drawPath(path, p)
+            }
+            TRASH -> {
+                c.drawLine(4.5f, 6.5f, 19.5f, 6.5f, p)
+                path.moveTo(9.5f, 6.5f); path.lineTo(10f, 4f); path.lineTo(14f, 4f); path.lineTo(14.5f, 6.5f)
+                c.drawPath(path, p)
+                r.set(6.5f, 6.5f, 17.5f, 20f); c.drawRoundRect(r, 2f, 2f, p)
+                c.drawLine(10.5f, 10f, 10.5f, 16.5f, p); c.drawLine(13.5f, 10f, 13.5f, 16.5f, p)
+            }
+            HIDE -> {
+                path.moveTo(3f, 12f); path.quadTo(12f, 3.5f, 21f, 12f); path.quadTo(12f, 20.5f, 3f, 12f)
+                c.drawPath(path, p)
+                c.drawCircle(12f, 12f, 2.8f, p)
+                c.drawLine(4.5f, 19.5f, 19.5f, 4.5f, p)
+            }
+            PLUS -> {
+                c.drawLine(12f, 5f, 12f, 19f, p); c.drawLine(5f, 12f, 19f, 12f, p)
+            }
+            MINUS -> {
+                c.drawLine(5f, 12f, 19f, 12f, p)
             }
         }
         c.restore()
