@@ -141,6 +141,12 @@ object AppRepo {
                             tintCache[key] = e.tint
                         }
                     }
+                    if (e.icon == null) {
+                        // sin icono la app quedaba invisible pero se podía tocar
+                        val b = fallbackIcon(label, px(), shape)
+                        e.icon = b
+                        cache[key] = b
+                    }
                     out.add(e)
                 }
                 out.sortBy { it.label.lowercase() }
@@ -309,6 +315,22 @@ object AppRepo {
         inner.offset(sw / 2f, sw / 2f)
         c.drawPath(inner, rim)
         return out
+    }
+
+    /** Icono de reserva (inicial sobre color) para apps cuyo icono no se pudo cargar. */
+    private fun fallbackIcon(label: String, size: Int, shape: Int): Bitmap {
+        val b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val c = Canvas(b)
+        val bg = Paint(Paint.ANTI_ALIAS_FLAG)
+        bg.shader = LinearGradient(0f, 0f, size.toFloat(), size.toFloat(), 0xFF4A5FA8.toInt(), 0xFF1B2440.toInt(), Shader.TileMode.CLAMP)
+        c.drawRect(0f, 0f, size.toFloat(), size.toFloat(), bg)
+        val t = Paint(Paint.ANTI_ALIAS_FLAG)
+        t.color = Color.WHITE
+        t.textSize = size * 0.46f
+        t.textAlign = Paint.Align.CENTER
+        val ch = label.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+        c.drawText(ch, size / 2f, size / 2f - (t.descent() + t.ascent()) / 2f, t)
+        return bake(b, shape)
     }
 
     private fun average(b: Bitmap): Int {

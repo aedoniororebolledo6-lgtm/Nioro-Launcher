@@ -1,5 +1,6 @@
 package com.nioro.launcher
 
+import android.os.SystemClock
 import android.view.Choreographer
 import kotlin.math.abs
 import kotlin.math.cos
@@ -102,6 +103,8 @@ class Ticker(private val frame: (Float) -> Boolean) : Choreographer.FrameCallbac
     val springs = ArrayList<Stepper>()
     private var running = false
     private var last = 0L
+    /** último fotograma o petición (ms): detecta un bucle que se quedó parado */
+    private var alive = 0L
 
     fun <T : Stepper> add(s: T): T {
         springs.add(s)
@@ -111,10 +114,18 @@ class Ticker(private val frame: (Float) -> Boolean) : Choreographer.FrameCallbac
     val isRunning: Boolean get() = running
 
     fun kick() {
+        val now = SystemClock.uptimeMillis()
         if (!running) {
             running = true
             last = 0L
+            alive = now
             Screen.animStart()
+            Choreographer.getInstance().postFrameCallback(this)
+        } else if (now - alive > 500L) {
+            // "corriendo" pero sin fotogramas desde hace rato (p. ej. MIUI congeló la app): se reanuda
+            alive = now
+            last = 0L
+            Choreographer.getInstance().removeFrameCallback(this)
             Choreographer.getInstance().postFrameCallback(this)
         }
     }
@@ -127,6 +138,7 @@ class Ticker(private val frame: (Float) -> Boolean) : Choreographer.FrameCallbac
 
     override fun doFrame(frameTimeNanos: Long) {
         if (!running) return
+        alive = SystemClock.uptimeMillis()
         // Primer fotograma: se usa el periodo real de la pantalla (8,3 ms a 120 Hz).
         val dt = if (last == 0L) Screen.frameSec else ((frameTimeNanos - last) / 1_000_000_000f).coerceIn(0.002f, 0.05f)
         last = frameTimeNanos
