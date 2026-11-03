@@ -1,0 +1,86 @@
+package com.nioro.launcher
+
+import android.app.Application
+import android.content.Context
+import android.content.SharedPreferences
+import kotlin.reflect.KProperty
+
+class LauncherApp : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        Prefs.init(this)
+    }
+}
+
+class IntPref(private val key: String, private val def: Int) {
+    operator fun getValue(thisRef: Any?, property: KProperty<*>): Int = Prefs.rawInt(key, def)
+    operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Int) = Prefs.putInt(key, value)
+}
+
+class BoolPref(private val key: String, private val def: Boolean) {
+    operator fun getValue(thisRef: Any?, property: KProperty<*>): Boolean = Prefs.rawBool(key, def)
+    operator fun setValue(thisRef: Any?, property: KProperty<*>, value: Boolean) = Prefs.putBool(key, value)
+}
+
+/** Ajustes del launcher. Todo se guarda en SharedPreferences. */
+object Prefs {
+    private var sp: SharedPreferences? = null
+
+    fun init(ctx: Context) {
+        if (sp == null) sp = ctx.applicationContext.getSharedPreferences("nioro_launcher", Context.MODE_PRIVATE)
+    }
+
+    private fun s(): SharedPreferences = sp!!
+    fun rawInt(k: String, d: Int): Int = s().getInt(k, d)
+    fun putInt(k: String, v: Int) { s().edit().putInt(k, v).apply() }
+    fun rawBool(k: String, d: Boolean): Boolean = s().getBoolean(k, d)
+    fun putBool(k: String, v: Boolean) { s().edit().putBoolean(k, v).apply() }
+
+    // ---- 5 estilos por categoría (0..4) ----
+    var openAnim by IntPref("openAnim", 0)
+    var returnAnim by IntPref("returnAnim", 1)
+    var dockMode by IntPref("dockMode", 0)
+    var bounceAnim by IntPref("bounceAnim", 0)
+    var pageAnim by IntPref("pageAnim", 0)
+    var recentsAnim by IntPref("recentsAnim", 0)
+    var drawerStyle by IntPref("drawerStyle", 0)
+
+    // ---- Apariencia / rendimiento ----
+    var speedPct by IntPref("speedPct", 100)
+    var glass by IntPref("glass", 60)
+    var iconDp by IntPref("iconDp", 58)
+    var dockDp by IntPref("dockDp", 52)
+    var columns by IntPref("columns", 4)
+    var magnify by IntPref("magnify", 70)
+    var labels by BoolPref("labels", true)
+    var saver by BoolPref("saver", false)
+    var blur by BoolPref("blur", true)
+    var tilt by BoolPref("tilt", false)
+    var seeded by BoolPref("seeded", false)
+
+    val speed: Float get() = speedPct / 100f
+
+    private fun getList(k: String): MutableList<String> {
+        val raw = s().getString(k, "") ?: ""
+        val out = ArrayList<String>()
+        for (p in raw.split('\n')) if (p.isNotEmpty()) out.add(p)
+        return out
+    }
+
+    private fun putList(k: String, v: List<String>) {
+        s().edit().putString(k, v.joinToString("\n")).apply()
+    }
+
+    fun homeKeys(): MutableList<String> = getList("homeKeys")
+    fun setHomeKeys(v: List<String>) = putList("homeKeys", v)
+    fun dockKeys(): MutableList<String> = getList("dockKeys")
+    fun setDockKeys(v: List<String>) = putList("dockKeys", v)
+    fun hidden(): MutableList<String> = getList("hidden")
+    fun setHidden(v: List<String>) = putList("hidden", v)
+    fun recentKeys(): MutableList<String> = getList("recentKeys")
+    fun setRecentKeys(v: List<String>) = putList("recentKeys", v)
+
+    fun resetLayout() {
+        s().edit().remove("homeKeys").remove("dockKeys").putBoolean("seeded", false).apply()
+    }
+}
