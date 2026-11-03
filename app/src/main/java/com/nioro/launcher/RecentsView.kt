@@ -38,6 +38,8 @@ class RecentsView(ctx: Context) : View0(ctx) {
     private val pos = ticker.add(SpringValue(0f, 200f, 26f, 0.0005f))
     private val gridScroll = Scroll1D(ticker)
     private val dismissY = ticker.add(SpringValue(0f, 260f, 30f, 0.5f))
+    private val closeAllSp = ticker.add(SpringValue(0f, 180f, 22f, 0.002f))
+    private var closingAll = false
     private var dismissIdx = -1
     private val glass = Glass()
     private val bmp = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -77,6 +79,8 @@ class RecentsView(ctx: Context) : View0(ctx) {
     fun setItems(list: List<AppEntry>) {
         items = ArrayList(list)
         style = Prefs.recentsAnim
+        closingAll = false
+        closeAllSp.snap(0f)
         pos.snap(0f)
         gridScroll.jump(0f)
         dismissIdx = -1
@@ -164,6 +168,10 @@ class RecentsView(ctx: Context) : View0(ctx) {
                 outA = clamp01(q * 1.5f)
                 out.set(cx - cw / 2f * sc, y - ch2 / 2f * sc, cx + cw / 2f * sc, y + ch2 / 2f * sc)
                 if (i == dismissIdx) out.offset(0f, dismissY.value)
+                if (closingAll) {
+                    out.offset(0f, -closeAllSp.value * h * 0.7f)
+                    outA *= 1f - clamp01(closeAllSp.value * 1.3f)
+                }
                 return out.bottom > 0 && out.top < h
             }
             else -> {
@@ -178,6 +186,10 @@ class RecentsView(ctx: Context) : View0(ctx) {
                 outA = clamp01(q * 2f)
                 out.set(cx - ss / 2f, y - ss / 2f, cx + ss / 2f, y + ss / 2f)
                 if (i == dismissIdx) out.offset(0f, dismissY.value)
+                if (closingAll) {
+                    out.offset(0f, -closeAllSp.value * h * 0.7f)
+                    outA *= 1f - clamp01(closeAllSp.value * 1.3f)
+                }
                 return true
             }
         }
@@ -188,6 +200,10 @@ class RecentsView(ctx: Context) : View0(ctx) {
         outA *= clamp01(q * 1.6f)
         out.set(cx - cw / 2f * sc, y - ch / 2f * sc, cx + cw / 2f * sc, y + ch / 2f * sc)
         if (i == dismissIdx) out.offset(0f, dismissY.value)
+        if (closingAll) {
+            out.offset(0f, -closeAllSp.value * h * (0.6f + abs(o) * 0.1f))
+            outA *= 1f - clamp01(closeAllSp.value * 1.3f)
+        }
         return out.right > -w * 0.2f && out.left < w * 1.2f
     }
 
@@ -226,7 +242,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
         btn.set(width / 2f - dp(80f), height - insetBottom - dp(78f), width / 2f + dp(80f), height - insetBottom - dp(34f))
         glass.draw(c, btn, dp(22f), a)
         hint.alpha = (255 * a).toInt()
-        c.drawText("Todas las apps", btn.centerX(), btn.centerY() + dp(5f), hint)
+        c.drawText("Cerrar todo", btn.centerX(), btn.centerY() + dp(5f), hint)
     }
 
     private fun drawCard(c: Canvas, e: AppEntry, rr: RectF, al: Float) {
@@ -369,7 +385,14 @@ class RecentsView(ctx: Context) : View0(ctx) {
                         ticker.kick()
                     } else if (up) {
                         if (btn.contains(x, y)) {
-                            listener?.onOpenAll()
+                            // "Cerrar todo" de One UI: las tarjetas salen volando hacia arriba
+                            Recents.forgetAll(items.map { it.key })
+                            performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+                            closingAll = true
+                            closeAllSp.snap(0f)
+                            closeAllSp.to(1f)
+                            ticker.kick()
+                            postDelayed({ listener?.onClose() }, 260)
                         } else if (hitIdx >= 0 && hitIdx < items.size) {
                             cardRect(hitIdx, r)
                             listener?.onLaunch(items[hitIdx], RectF(r))

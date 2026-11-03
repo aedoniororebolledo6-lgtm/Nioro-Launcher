@@ -30,6 +30,7 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
         fun onMenu(e: AppEntry, anchor: RectF)
         fun onClosed()
         fun dismissMenu()
+        fun openSettings()
     }
 
     var callback: Callback? = null
@@ -58,8 +59,19 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
         search.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
         search.imeOptions = EditorInfo.IME_ACTION_GO
         search.background = GlassDrawable(22f)
-        search.setPadding(dp(22f).toInt(), 0, dp(22f).toInt(), 0)
+        // Barra de búsqueda One UI: lupa a la izquierda y menú ⋮ a la derecha
+        search.setPadding(dp(18f).toInt(), 0, dp(14f).toInt(), 0)
         search.gravity = Gravity.CENTER_VERTICAL
+        search.setCompoundDrawablesRelative(GlyphDrawable(Glyphs.SEARCH, 20f, 0xCCFFFFFF.toInt()), null, GlyphDrawable(Glyphs.MORE, 22f), null)
+        search.compoundDrawablePadding = dp(12f).toInt()
+        @Suppress("ClickableViewAccessibility")
+        search.setOnTouchListener { v, ev ->
+            if (ev.actionMasked == android.view.MotionEvent.ACTION_UP && ev.x > v.width - dp(48f)) {
+                hideKeyboard()
+                callback?.openSettings()
+                true
+            } else false
+        }
         search.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}

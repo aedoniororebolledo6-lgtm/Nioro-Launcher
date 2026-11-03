@@ -44,6 +44,7 @@ object Prefs {
     var pageAnim by IntPref("pageAnim", 0)
     var recentsAnim by IntPref("recentsAnim", 0)
     var drawerStyle by IntPref("drawerStyle", 0)
+    var clockStyle by IntPref("clockStyle", 0)
 
     // ---- Apariencia / rendimiento ----
     var speedPct by IntPref("speedPct", 100)

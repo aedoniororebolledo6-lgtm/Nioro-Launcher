@@ -348,11 +348,31 @@ object Recents {
         Prefs.setRecentKeys(session)
     }
 
+    /** paquete -> momento en que se quitó de Recientes (para que no reaparezca hasta volver a usarse). */
+    private val dismissed = HashMap<String, Long>()
+
     @Synchronized
     fun forget(key: String) {
         ensure()
         session.remove(key)
         Prefs.setRecentKeys(session)
+        val pkg = key.substringBefore('/')
+        dismissed[pkg] = System.currentTimeMillis()
+    }
+
+    @Synchronized
+    fun forgetAll(keys: List<String>) {
+        ensure()
+        val now = System.currentTimeMillis()
+        for (k in keys) dismissed[k.substringBefore('/')] = now
+        session.clear()
+        Prefs.setRecentKeys(session)
+    }
+
+    @Synchronized
+    private fun isDismissed(pkg: String, lastUse: Long): Boolean {
+        val d = dismissed[pkg] ?: return false
+        return lastUse <= d
     }
 
     fun hasUsageAccess(ctx: Context): Boolean {
@@ -391,7 +411,8 @@ object Recents {
         val out = ArrayList<AppEntry>()
         val seen = HashSet<String>()
         val hidden = Prefs.hidden()
-        for ((pkg, _) in usagePackages(ctx)) {
+        for ((pkg, last) in usagePackages(ctx)) {
+            if (isDismissed(pkg, last)) continue
             if (pkg == ctx.packageName) continue
             val e = AppRepo.firstOfPackage(pkg) ?: continue
             if (e.key in hidden) continue
@@ -409,7 +430,7 @@ object Recents {
         val sess = snapshot()
         val out = HashSet<String>()
         val now = System.currentTimeMillis()
-        for ((pkg, t) in usagePackages(ctx)) if (now - t < 30L * 60_000L) out.add(pkg)
+        for ((pkg, t) in usagePackages(ctx)) if (now - t < 30L * 60_000L && !isDismissed(pkg, t)) out.add(pkg)
         if (out.isEmpty()) {
             for (i in 0 until minOf(4, sess.size)) {
                 val e = AppRepo.get(sess[i]) ?: continue

@@ -175,6 +175,7 @@ class MainActivity : Activity() {
         home.pauseClock()
         menu.dismiss()
         overlay.hide()
+        home.exitEdit(true)
         // nada de animaciones ni sensores mientras el launcher no se ve
         if (drawer.isOpen) drawer.closeNow()
         if (recents.isOpen) recents.closeNow()
@@ -187,6 +188,7 @@ class MainActivity : Activity() {
         if (intent?.action == Intent.ACTION_MAIN && resumed) {
             when {
                 menu.showing -> menu.dismiss()
+                home.isEditing -> home.exitEdit()
                 recents.isOpen -> recents.close()
                 drawer.isOpen -> drawer.close()
                 else -> home.goToFirstPage()
@@ -199,6 +201,7 @@ class MainActivity : Activity() {
     override fun onBackPressed() {
         when {
             menu.showing -> menu.dismiss()
+            home.isEditing -> home.exitEdit()
             recents.isOpen -> recents.close()
             drawer.isOpen -> drawer.close()
             else -> home.goToFirstPage()
@@ -373,6 +376,21 @@ class MainActivity : Activity() {
             }
         }
         override fun showHomeMenu(x: Float, y: Float) = homeMenu(x, y)
+        override fun editAction(i: Int) {
+            when (i) {
+                0 -> try {
+                    startActivity(Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Fondo de pantalla"))
+                } catch (t: Throwable) {
+                }
+                else -> {
+                    val it = Intent(this@MainActivity, SettingsActivity::class.java)
+                    it.putExtra("page", when (i) { 1 -> SettingsActivity.PAGE_APPS; 2 -> SettingsActivity.PAGE_MOTION; else -> -1 })
+                    startActivity(it)
+                    @Suppress("DEPRECATION")
+                    overridePendingTransition(R.anim.slide_up_in, R.anim.stay)
+                }
+            }
+        }
     }
 
     private val drawerCb = object : DrawerHost.Callback {
@@ -387,6 +405,11 @@ class MainActivity : Activity() {
             updateBackdrop()
         }
         override fun dismissMenu() = menu.dismiss()
+        override fun openSettings() {
+            startActivity(Intent(this@MainActivity, SettingsActivity::class.java))
+            @Suppress("DEPRECATION")
+            overridePendingTransition(R.anim.slide_up_in, R.anim.stay)
+        }
     }
 
     private val recentsCb = object : RecentsView.Listener {

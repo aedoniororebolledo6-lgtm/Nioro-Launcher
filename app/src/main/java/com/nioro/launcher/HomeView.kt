@@ -41,6 +41,8 @@ class HomeView(ctx: Context) : View(ctx) {
         fun dismissMenu()
         fun expandShade()
         fun showHomeMenu(x: Float, y: Float)
+        /** Botones del modo edición: 0 Fondo, 1 Vista de apps, 2 Animaciones, 3 Ajustes. */
+        fun editAction(i: Int)
     }
 
     class Slot(val kind: Int, val key: String?) { // 0 app, 1 launchpad, 2 recientes, 3 separador
@@ -73,6 +75,13 @@ class HomeView(ctx: Context) : View(ctx) {
     private var pressSlot: Slot? = null
     private var tickSlot: Slot? = null
     private var datePillW = 0f
+    private val editSp = SpringValue(0f, 260f, 26f, 0.0008f)
+    private var hourStr = ""
+    private var minStr = ""
+    private val stackPaint = TextPaint(Paint.ANTI_ALIAS_FLAG)
+    private val editLabel = TextPaint(Paint.ANTI_ALIAS_FLAG)
+    private val editNames = arrayOf("Fondo", "Vista de apps", "Animaciones", "Ajustes")
+    private val editGlyphs = intArrayOf(Glyphs.WALLPAPER, Glyphs.GRID, Glyphs.MOTION, Glyphs.GEAR)
     private var drawerP = 0f
     private var running: Set<String> = emptySet()
 
@@ -138,8 +147,7 @@ class HomeView(ctx: Context) : View(ctx) {
         if (touchMode == M_NONE && !moved && k == null && !inDock) {
             touchMode = M_MENU
             unpress()
-            performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-            host?.showHomeMenu(downX, downY)
+            enterEdit()
         } else if (touchMode == M_NONE && !moved && k != null) {
             val e = AppRepo.get(k)
             if (e != null) {
@@ -203,6 +211,17 @@ class HomeView(ctx: Context) : View(ctx) {
         ticker.add(pageSp)
         ticker.add(enterSp)
         ticker.add(pressSp)
+        ticker.add(editSp)
+        stackPaint.color = Color.WHITE
+        stackPaint.textSize = dp(96f)
+        stackPaint.typeface = Typeface.create(Typeface.DEFAULT, 300, false)
+        stackPaint.letterSpacing = -0.03f
+        stackPaint.setShadowLayer(dp(10f), 0f, dp(2f), 0x55000000)
+        editLabel.color = Color.WHITE
+        editLabel.textSize = dp(12.5f)
+        editLabel.textAlign = Paint.Align.CENTER
+        editLabel.typeface = Typeface.create(Typeface.DEFAULT, 500, false)
+        editLabel.setShadowLayer(dp(3f), 0f, dp(1f), 0x88000000.toInt())
         updateClock()
     }
 
@@ -242,6 +261,30 @@ class HomeView(ctx: Context) : View(ctx) {
         invalidate()
     }
 
+    val isEditing: Boolean get() = editSp.target > 0.5f
+
+    /** Modo edición estilo One UI: las páginas se encogen y aparece la barra inferior. */
+    fun enterEdit() {
+        if (isEditing) return
+        editGesture = false
+        editSp.tune(260f, 0.78f)
+        editSp.to(1f)
+        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        ticker.kick()
+    }
+
+    fun exitEdit(now: Boolean = false) {
+        if (!isEditing && editSp.value <= 0.001f) return
+        if (now) {
+            editSp.snap(0f)
+            invalidate()
+            return
+        }
+        editSp.tune(300f, 1f)
+        editSp.to(0f)
+        ticker.kick()
+    }
+
     fun goToFirstPage() {
         if (pageSp.value > 0.01f) {
             pageSp.to(0f)
@@ -278,7 +321,11 @@ class HomeView(ctx: Context) : View(ctx) {
         dockH = dp(Prefs.dockDp.toFloat()) + dp(22f)
         dockCy = dockBottom - dockH / 2f
         dotsY = dockBottom - dockH - dp(22f)
-        gridTop = insetTop + dp(146f)
+        gridTop = insetTop + when (Prefs.clockStyle) {
+            1 -> dp(232f)
+            2 -> dp(28f)
+            else -> dp(146f)
+        }
         val avail = dotsY - dp(16f) - gridTop
         val labelH = if (Prefs.labels) dp(20f) else 0f
         val minCell = iconPx + labelH + dp(24f)
@@ -300,6 +347,7 @@ class HomeView(ctx: Context) : View(ctx) {
         ticker.springs.add(pageSp)
         ticker.springs.add(enterSp)
         ticker.springs.add(pressSp)
+        ticker.springs.add(editSp)
         pressSlot = null
         tickSlot = null
         for (s in slots) {
@@ -375,6 +423,9 @@ class HomeView(ctx: Context) : View(ctx) {
         lastMinute = minute
         val loc = Locale.getDefault()
         timeStr = SimpleDateFormat(DateFormat.getBestDateTimePattern(loc, "jm"), loc).format(Date(now))
+        val is24 = DateFormat.is24HourFormat(context)
+        hourStr = SimpleDateFormat(if (is24) "HH" else "hh", loc).format(Date(now))
+        minStr = SimpleDateFormat("mm", loc).format(Date(now))
         dateStr = SimpleDateFormat(DateFormat.getBestDateTimePattern(loc, "EEEEdMMMM"), loc).format(Date(now))
         dateStr = dateStr.replaceFirstChar { if (it.isLowerCase()) it.titlecase(loc) else it.toString() }
         datePillW = 0f
@@ -495,12 +546,66 @@ class HomeView(ctx: Context) : View(ctx) {
             c.scale(s, s, width / 2f, height / 2f)
         }
         val enterOn = enterSp.value < 0.9995f || enterSp.active
+        val ed = editSp.value
+        if (ed > 0.001f) {
+            val s = 1f - 0.24f * ed
+            c.save()
+            c.scale(s, s, width / 2f, editPivotY())
+        }
         drawClock(c, enterOn)
         drawPages(c, enterOn)
         drawDots(c)
-        drawDock(c, enterOn)
+        if (ed > 0.001f) c.restore()
+        if (ed < 0.999f) {
+            c.save()
+            c.translate(0f, ed * dp(70f))
+            dockFade = 1f - clamp01(ed * 1.4f)
+            drawDock(c, enterOn)
+            dockFade = 1f
+            c.restore()
+        }
+        if (ed > 0.001f) drawEditBar(c, ed)
         drawDrag(c)
         c.restore()
+    }
+
+    private var dockFade = 1f
+
+    private fun editPivotY(): Float = (insetTop + dotsY) / 2f
+
+    private fun editBtnCenter(i: Int, out: FloatArray) {
+        val gap = width / 4f
+        out[0] = gap * i + gap / 2f
+        out[1] = dockCy - dp(8f)
+    }
+
+    private val btnTmp = FloatArray(2)
+
+    private fun drawEditBar(c: Canvas, ed: Float) {
+        val a = clamp01(ed * 1.3f)
+        val dy = (1f - clamp01(ed)) * dp(60f)
+        val r = dp(27f)
+        for (i in 0 until 4) {
+            editBtnCenter(i, btnTmp)
+            // aparición escalonada, como One UI
+            val q = clamp01(ed * 1.6f - i * 0.12f)
+            val cx = btnTmp[0]
+            val cy = btnTmp[1] + dy + (1f - q) * dp(24f)
+            val rr = r * lerp(0.7f, 1f, q)
+            tmpRect.set(cx - rr, cy - rr, cx + rr, cy + rr)
+            glass.draw(c, tmpRect, rr, a * q)
+            Glyphs.draw(c, editGlyphs[i], cx, cy, rr * 0.95f, Color.WHITE, a * q)
+            editLabel.alpha = (255 * a * q).toInt().coerceIn(0, 255)
+            c.drawText(editNames[i], cx, cy + rr + dp(19f), editLabel)
+        }
+    }
+
+    private fun editBtnAt(x: Float, y: Float): Int {
+        for (i in 0 until 4) {
+            editBtnCenter(i, btnTmp)
+            if (hypot(x - btnTmp[0], y - btnTmp[1]) < dp(40f)) return i
+        }
+        return -1
     }
 
     private fun drawClock(c: Canvas, enterOn: Boolean) {
@@ -512,6 +617,21 @@ class HomeView(ctx: Context) : View(ctx) {
             dy = itx.dy * 0.5f
         }
         updateClock()
+        if (Prefs.clockStyle == 2) return
+        if (Prefs.clockStyle == 1) {
+            // Reloj apilado de One UI: horas sobre minutos, alineado a la izquierda
+            val x = dp(26f)
+            stackPaint.textAlign = Paint.Align.LEFT
+            stackPaint.alpha = (255 * a).toInt().coerceIn(0, 255)
+            c.drawText(hourStr, x, insetTop + dp(100f) + dy, stackPaint)
+            stackPaint.alpha = (205 * a).toInt().coerceIn(0, 255)
+            c.drawText(minStr, x, insetTop + dp(184f) + dy, stackPaint)
+            datePaint.textAlign = Paint.Align.LEFT
+            datePaint.alpha = (235 * a).toInt().coerceIn(0, 255)
+            c.drawText(dateStr, x + dp(4f), insetTop + dp(214f) + dy, datePaint)
+            datePaint.textAlign = Paint.Align.CENTER
+            return
+        }
         val cx = width / 2f
         clockPaint.alpha = (255 * a).toInt().coerceIn(0, 255)
         datePaint.alpha = (245 * a).toInt().coerceIn(0, 255)
@@ -564,6 +684,11 @@ class HomeView(ctx: Context) : View(ctx) {
                 c.translate(pt.tx, 0f)
                 if (pt.sc != 1f) c.scale(pt.sc, pt.sc, w / 2f, (gridTop + dotsY) / 2f)
                 if (pt.rotY != 0f) Rot3D.apply(c, pt.rotY, pt.pivot * w, height / 2f)
+            }
+            val ed = editSp.value
+            if (ed > 0.001f) {
+                tmpRect.set(dp(10f), insetTop + dp(10f), w - dp(10f), dotsY + dp(18f))
+                glass.draw(c, tmpRect, dp(34f), clamp01(ed) * 0.75f * pageAlpha, false)
             }
             val start = pg * cap
             val end = min(homeKeys.size, start + cap)
@@ -647,13 +772,14 @@ class HomeView(ctx: Context) : View(ctx) {
             s.cx = x + sw / 2f
             x += sw
         }
-        var a = 1f
+        var a = dockFade
         var dy = 0f
         if (enterOn) {
             Motion.enterItem(Prefs.returnAnim, enterSp.value, 0, 1, itx)
-            a = itx.alpha
+            a = itx.alpha * dockFade
             dy = (1f - clamp01(enterSp.value)) * dp(90f)
         }
+        if (a <= 0.01f) return
         val capW = max(restTotal, total) + dp(20f)
         capRect.set((w - capW) / 2f, dockCy - dockH / 2f + dy, (w + capW) / 2f, dockCy + dockH / 2f + dy)
         glass.draw(c, capRect, dockH * 0.44f, a)
@@ -765,7 +891,62 @@ class HomeView(ctx: Context) : View(ctx) {
         ticker.kick()
     }
 
+    private var editPaging = false
+    private var editGesture = false
+
+    private fun editTouch(ev: MotionEvent): Boolean {
+        val x = ev.x
+        val y = ev.y
+        val s = 1f - 0.24f
+        // el dedo que abrió el modo edición se ignora hasta que se levante
+        if (ev.actionMasked == MotionEvent.ACTION_DOWN) editGesture = true
+        if (!editGesture) return true
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                vt?.recycle()
+                vt = VelocityTracker.obtain()
+                vt?.addMovement(ev)
+                downX = x
+                downY = y
+                moved = false
+                editPaging = false
+                pageStart = pageSp.value
+                pageSp.snap(pageSp.value)
+            }
+            MotionEvent.ACTION_MOVE -> {
+                vt?.addMovement(ev)
+                val dx = x - downX
+                if (!moved && (abs(dx) > slop || abs(y - downY) > slop)) {
+                    moved = true
+                    editPaging = abs(dx) > abs(y - downY)
+                }
+                if (editPaging) {
+                    setPageDrag(pageStart - dx / (width * s))
+                    invalidate()
+                }
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                vt?.addMovement(ev)
+                if (editPaging) {
+                    vt?.computeCurrentVelocity(1000)
+                    settle(-(vt?.xVelocity ?: 0f) / (width * s))
+                } else if (!moved && ev.actionMasked == MotionEvent.ACTION_UP) {
+                    val b = editBtnAt(x, y)
+                    exitEdit()
+                    if (b >= 0) {
+                        performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                        host?.editAction(b)
+                    }
+                }
+                vt?.recycle()
+                vt = null
+            }
+        }
+        return true
+    }
+
     override fun onTouchEvent(ev: MotionEvent): Boolean {
+        if (isEditing) return editTouch(ev)
         val x = ev.x
         val y = ev.y
         when (ev.actionMasked) {
