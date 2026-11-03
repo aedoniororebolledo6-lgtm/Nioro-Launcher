@@ -22,4 +22,5 @@ Después de instalar: abre **Ajustes de Nioro Launcher → Establecer como launc
 ## Gestos
 - Deslizar arriba: todas las apps · Deslizar abajo: notificaciones
 - Mantener un icono: menú / moverlo (arrástralo al dock o arriba para quitarlo)
-- Mantener el fondo: ajustes del launcher, fondo de pantalla, cambiar vista de apps
+- Mantener el fondo: modo edición (fondo, vista de apps, animaciones y ajustes)
+- Todos los gestos se cambian en **Ajustes → Gestos y vibración**; la acción «Menú del inicio» abre el menú con Ajustes del launcher, Fondo de pantalla y Siguiente vista de apps

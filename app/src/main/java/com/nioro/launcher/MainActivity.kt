@@ -425,6 +425,7 @@ class MainActivity : Activity() {
                 Toast.makeText(this, "Iconos: " + SettingsActivity.SHAPES[Prefs.iconShape], Toast.LENGTH_SHORT).show()
                 reloadApps()
             }
+            S.A_HOME_MENU -> homeMenu(home.touchX, home.touchY)
         }
     }
 

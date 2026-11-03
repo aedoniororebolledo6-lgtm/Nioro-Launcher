@@ -5,7 +5,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
-import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.VelocityTracker
 import kotlin.math.abs
@@ -43,7 +42,7 @@ class FanView(ctx: Context) : AppsView(ctx) {
         if (!moved && downIdx in shown.indices) {
             longFired = true
             unpress()
-            performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            Hx.fire(this, S.HE_LONG)
             val r = RectF()
             iconRect(downIdx, r)
             listener?.onMenu(shown[downIdx], r)

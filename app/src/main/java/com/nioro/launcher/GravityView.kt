@@ -7,7 +7,6 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import org.jbox2d.collision.shapes.CircleShape
 import org.jbox2d.collision.shapes.PolygonShape
@@ -54,7 +53,7 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
             longFired = true
             unpress()
             dragBall = null
-            performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            Hx.fire(this, S.HE_LONG)
             val r = RectF()
             ballRect(b, r)
             listener?.onMenu(b.e, r)

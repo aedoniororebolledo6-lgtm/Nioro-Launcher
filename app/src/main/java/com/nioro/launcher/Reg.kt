@@ -526,7 +526,8 @@ object S {
     val ACTIONS = arrayOf(
         "Nada", "Vista de apps", "Notificaciones", "Ajustes rápidos", "Apps recientes", "Modo edición",
         "Buscar apps", "Ajustes del launcher", "Fondo de pantalla", "Primera página", "Linterna",
-        "Cámara", "Ajustes del sistema", "Modo ahorro sí/no", "Siguiente vista de apps", "Siguiente forma de iconos"
+        "Cámara", "Ajustes del sistema", "Modo ahorro sí/no", "Siguiente vista de apps", "Siguiente forma de iconos",
+        "Menú del inicio"
     )
     const val A_NONE = 0
     const val A_DRAWER = 1
@@ -544,6 +545,7 @@ object S {
     const val A_SAVER = 13
     const val A_NEXT_VIEW = 14
     const val A_NEXT_SHAPE = 15
+    const val A_HOME_MENU = 16
 
     const val G_UP = 0
     const val G_DOWN = 1
