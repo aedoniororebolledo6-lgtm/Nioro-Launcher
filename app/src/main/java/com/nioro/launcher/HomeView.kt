@@ -54,6 +54,8 @@ class HomeView(ctx: Context) : View(ctx) {
         val bs = SpringValue(0f, 200f, 8f, 0.002f)
         val br = SpringValue(0f, 90f, 7f, 0.002f)
         val bx = SpringValue(0f, 160f, 6f, 0.002f)
+        /** crecimiento al aparecer en el dock (0 -> 1 con rebote) */
+        val gw = SpringValue(1f, 260f, 14f, 0.002f)
         var rest = 0f
         var cx = 0f
         var scale = 1f
@@ -399,7 +401,28 @@ class HomeView(ctx: Context) : View(ctx) {
         }
     }
 
+    /** el dock se ensancha o encoge con rebote en vez de saltar de tamaño */
+    private val dockShrink = SpringValue(0f, 260f, 14f, 0.3f)
+
+    private fun copySpring(from: SpringValue, to: SpringValue) {
+        to.value = from.value
+        to.target = from.target
+        to.velocity = from.velocity
+        to.active = from.active
+    }
+
+    private fun restWidth(): Float {
+        var t = 0f
+        for (s in slots) t += (if (s.kind == 3) dp(14f) else dockUnit) * s.gw.value
+        return t
+    }
+
     private fun rebuildDock() {
+        // estado anterior: así un icono que ya estaba no vuelve a aparecer, y uno nuevo crece con rebote
+        val old = HashMap<String, Slot>()
+        for (s in slots) old[s.kind.toString() + "|" + (s.key ?: "")] = s
+        val hadDock = slots.isNotEmpty() && dockUnit > 0f
+        val oldRest = if (hadDock) restWidth() + dockShrink.value else 0f
         slots.clear()
         val lp = S.b(S.K_LAUNCHPAD)
         val rc = S.b(S.K_RECENTS)
@@ -414,9 +437,22 @@ class HomeView(ctx: Context) : View(ctx) {
         ticker.springs.add(enterSp)
         ticker.springs.add(pressSp)
         ticker.springs.add(editSp)
+        ticker.springs.add(dockShrink)
         pressSlot = null
         tickSlot = null
+        var grew = false
         for (s in slots) {
+            val prev = old[s.kind.toString() + "|" + (s.key ?: "")]
+            if (prev != null) {
+                copySpring(prev.gw, s.gw)
+            } else {
+                // icono nuevo (p. ej. las apps terminan de cargar al arrancar): crece desde pequeño con rebote
+                Mo.tune(s.gw, S.MO_DOCK_MAG, 240f, 0.42f)
+                s.gw.snap(0.15f)
+                s.gw.to(1f)
+                grew = true
+            }
+            ticker.springs.add(s.gw)
             ticker.springs.add(s.sc)
             ticker.springs.add(s.by)
             ticker.springs.add(s.bs)
@@ -425,6 +461,16 @@ class HomeView(ctx: Context) : View(ctx) {
             if (Prefs.dockMode == 1) Mo.tune(s.sc, S.MO_DOCK_MAG, 210f, 0.42f) else Mo.tune(s.sc, S.MO_DOCK_MAG, 520f, 0.95f)
         }
         layoutDock()
+        // si el dock perdió iconos, la cápsula se encoge con rebote desde su ancho anterior
+        val newRest = restWidth()
+        if (hadDock && oldRest > newRest + 1f) {
+            Mo.tune(dockShrink, S.MO_DOCK_MAG, 240f, 0.45f)
+            dockShrink.value = oldRest - newRest
+            dockShrink.velocity = 0f
+            dockShrink.to(0f)
+            grew = true
+        }
+        if (grew) ticker.kick()
     }
 
     private fun layoutDock() {
@@ -978,14 +1024,14 @@ class HomeView(ctx: Context) : View(ctx) {
         var total = 0f
         for (s in slots) {
             s.scale = s.sc.value
-            total += if (s.kind == 3) sepW else dockUnit * s.scale
+            total += (if (s.kind == 3) sepW else dockUnit * s.scale) * s.gw.value
         }
         var fit = 1f
         if (total > w - dp(8f)) fit = (w - dp(8f)) / total
         total *= fit
         var x = (w - total) / 2f
         for (s in slots) {
-            val sw = (if (s.kind == 3) sepW else dockUnit * s.scale) * fit
+            val sw = (if (s.kind == 3) sepW else dockUnit * s.scale) * s.gw.value * fit
             s.cx = x + sw / 2f
             x += sw
         }
@@ -997,7 +1043,8 @@ class HomeView(ctx: Context) : View(ctx) {
             dy = (1f - clamp01(enterSp.value)) * dp(90f)
         }
         if (a <= 0.01f) return
-        val capW = max(restTotal, total) + dp(S.f(S.K_EXTRA_W))
+        // cápsula: ancho en reposo animado (crece/encoge con rebote) o el de la magnificación si es mayor
+        val capW = max(restWidth() + dockShrink.value * fit, total) + dp(S.f(S.K_EXTRA_W))
         when (S.i(S.K_SHAPE)) {
             1 -> {
                 capRect.set(dp(8f), dockCy - dockH / 2f + dy, w - dp(8f), dockCy + dockH / 2f + dy)
@@ -1027,7 +1074,7 @@ class HomeView(ctx: Context) : View(ctx) {
             }
             if (bmp == null) continue
             if (touchMode == M_DRAG && dragFromDock && s.key == dragKey) continue
-            val scale = s.scale * (1f + s.bs.value) * (if (s === pressSlot) pressSp.value else 1f)
+            val scale = s.scale * s.gw.value * (1f + s.bs.value) * (if (s === pressSlot) pressSp.value else 1f)
             val size = dockIconPx * scale * dkScale
             val lift = (s.scale - 1f) * dockIconPx * lf
             val bounceUp = max(0f, s.by.value) * dockIconPx
