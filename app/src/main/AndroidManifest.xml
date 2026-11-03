@@ -67,6 +67,12 @@
             android:name=".InstallReceiver"
             android:exported="false" />
 
+        <provider
+            android:name=".ApkProvider"
+            android:authorities="${applicationId}.apk"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
         <activity
             android:name=".SettingsActivity"
             android:exported="true"
