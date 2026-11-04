@@ -98,6 +98,8 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
     }
 
     override fun onFrame(dt: Float): Boolean {
+        // el contenedor (fondo, barra, inicio detrás) sigue a lo que se tira hacia abajo
+        listener?.onPull(clamp01(max(0f, pull.value) / max(1f, height * 0.45f)))
         invalidate()
         return false
     }
@@ -237,6 +239,7 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
                 } else if (mode == 2) {
                     // el contenido sigue al dedo
                     pull.snap(max(0f, dy - slop))
+                    listener?.onPull(clamp01(pull.value / max(1f, height * 0.45f)))
                     invalidate()
                 }
                 return true

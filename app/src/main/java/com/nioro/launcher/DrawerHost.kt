@@ -216,6 +216,11 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
                 callback?.dismissMenu()
                 hideKeyboard()
             }
+            override fun onPull(k: Float) {
+                if (kotlin.math.abs(k - pullK) < 0.002f) return
+                pullK = k
+                applyProgress()
+            }
         }
         addView(v, 0, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         if (search.parent == null) {
@@ -364,6 +369,7 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
     }
 
     private fun finishClose() {
+        pullK = 0f
         view?.onClosed()
         view?.progress = 0f
         visibility = GONE
@@ -377,6 +383,18 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
         imm.hideSoftInputFromWindow(search.windowToken, 0)
     }
 
+    /** tirar para cerrar: el fondo se aclara, la barra se va y asoma el inicio mientras el dedo baja */
+    private var pullK = 0f
+
+    private fun applyProgress() {
+        val a = clamp01(sp.value)
+        search.alpha = a * (1f - pullK)
+        // la barra entra desde arriba creciendo, y con el teclado se vuelve isla
+        placeIsland()
+        callback?.onProgress(a * (1f - pullK * 0.85f))
+        invalidate()
+    }
+
     private fun onFrame(): Boolean {
         val p = sp.value
         val v = view
@@ -384,12 +402,7 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
             v.progress = p
             v.invalidate()
         }
-        val a = clamp01(p)
-        search.alpha = a
-        // la barra entra desde arriba creciendo, y con el teclado se vuelve isla
-        placeIsland()
-        callback?.onProgress(a)
-        invalidate()
+        applyProgress()
         if (!sp.active && !isOpen && p <= 0.001f) {
             finishClose()
             return false
@@ -405,7 +418,7 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
     override fun onDraw(c: Canvas) {
         val a = clamp01(sp.value)
         scrim.shader = scrimShader
-        scrim.alpha = (255 * a * S.p(S.DR_DIM) * (if (Prefs.drawerStyle == 1 || Prefs.drawerStyle == 2) 0.75f else 1f)).toInt().coerceIn(0, 255)
+        scrim.alpha = (255 * a * (1f - pullK * 0.8f) * S.p(S.DR_DIM) * (if (Prefs.drawerStyle == 1 || Prefs.drawerStyle == 2) 0.75f else 1f)).toInt().coerceIn(0, 255)
         c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), scrim)
     }
 
