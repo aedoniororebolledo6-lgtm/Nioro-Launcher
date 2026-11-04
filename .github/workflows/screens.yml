@@ -10,6 +10,11 @@ on:
 permissions:
   contents: write
 
+# una sola ronda a la vez: la nueva cancela la anterior (si no, se borran las capturas entre sí)
+concurrency:
+  group: capturas
+  cancel-in-progress: true
+
 jobs:
   screens:
     runs-on: ubuntu-latest
