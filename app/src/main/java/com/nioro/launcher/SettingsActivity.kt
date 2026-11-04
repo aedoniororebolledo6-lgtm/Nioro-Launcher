@@ -139,8 +139,17 @@ class SettingsActivity : Activity() {
             ins
         }
         push(buildMain(), false)
-        val start = intent.getIntExtra("page", -1)
+        // al repintarse con un tema nuevo vuelve a la categoría donde estabas
+        val start = savedInstanceState?.getInt("cat", -1)?.takeIf { it >= 0 } ?: intent.getIntExtra("page", -1)
         if (start in 0..8) stack.post { push(buildCategory(start), false) }
+    }
+
+    /** categoría abierta ahora (-1 = portada); se guarda para recreate() */
+    private var openCat = -1
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt("cat", if (pages.size >= 2) openCat else -1)
     }
 
     override fun onResume() {
@@ -201,6 +210,7 @@ class SettingsActivity : Activity() {
         if (pages.size < 2 || navBusy) return
         navBusy = true
         val top = pages.removeAt(pages.size - 1)
+        if (pages.size == 1) openCat = -1
         val prev = pages.last()
         val w = stack.width.toFloat()
         // la página que sale ya no responde a toques
@@ -317,6 +327,9 @@ class SettingsActivity : Activity() {
         }
         heroStatus?.invoke()
 
+        // Temas de color: tiñen todo el launcher
+        colorThemesCard(c)
+
         // Actualizar desde GitHub, sin tienda
         val up = card(c, dp(6f).toInt())
         updateRow(up)
@@ -354,7 +367,11 @@ class SettingsActivity : Activity() {
     }
 
     private fun buildCategory(i: Int): View = page(CAT_TITLES[i], CAT_SUBS[i], false) { c ->
-        if (i == PAGE_LOOK) themesCard(c)
+        openCat = i
+        if (i == PAGE_LOOK) {
+            colorThemesCard(c)
+            themesCard(c)
+        }
         if (i == PAGE_GESTURES) {
             val t = text("Elige qué hace cada gesto en la pantalla de inicio y cómo vibra el launcher.", 13.5f, 400, OneColors.SUB)
             t.setPadding(dp(20f).toInt(), dp(4f).toInt(), dp(20f).toInt(), 0)
@@ -558,6 +575,38 @@ class SettingsActivity : Activity() {
         }
     }
 
+    /** tarjeta con las muestras de los temas de color */
+    private fun colorThemesCard(c: LinearLayout) {
+        val tk = card(c, dp(14f).toInt())
+        tk.addView(text("Tema de color", 16.5f, 500).apply { setPadding(dp(20f).toInt(), 0, 0, dp(2f).toInt()) })
+        tk.addView(text("Inicio, dock, vista de apps, recientes, menús y estos ajustes", 13.5f, 400, OneColors.SUB)
+            .apply { setPadding(dp(20f).toInt(), 0, dp(16f).toInt(), dp(12f).toInt()) })
+        val hs = HorizontalScrollView(this)
+        hs.isHorizontalScrollBarEnabled = false
+        hs.overScrollMode = View.OVER_SCROLL_NEVER
+        val row = LinearLayout(this)
+        row.setPadding(dp(12f).toInt(), dp(4f).toInt(), dp(12f).toInt(), dp(4f).toInt())
+        for (i in ColorThemes.THEMES.indices) {
+            val sw = ThemeSwatch(this, i)
+            sw.picked = Prefs.colorTheme == i
+            sw.setOnClickListener {
+                if (Prefs.colorTheme == i) return@setOnClickListener
+                ColorThemes.apply(i)
+                Hx.fire(it, S.HE_SETTING)
+                // la muestra se hunde y rebota; luego Ajustes se repinta con el tema nuevo
+                it.animate().cancel()
+                it.scaleX = 0.88f
+                it.scaleY = 0.88f
+                it.animate().scaleX(1f).scaleY(1f).setInterpolator(android.view.animation.OvershootInterpolator(3f)).setDuration(300)
+                    .withEndAction { if (!isFinishing) recreate() }.start()
+                toast("Tema " + ColorThemes.THEMES[i].name)
+            }
+            row.addView(sw, LinearLayout.LayoutParams(dp(92f).toInt(), dp(124f).toInt()).apply { rightMargin = dp(8f).toInt() })
+        }
+        hs.addView(row)
+        tk.addView(hs)
+    }
+
     private fun themesCard(c: LinearLayout) {
         val tk = card(c)
         tk.addView(text("Temas rápidos", 16.5f, 500).apply { setPadding(dp(20f).toInt(), 0, 0, dp(10f).toInt()) })
@@ -577,6 +626,8 @@ class SettingsActivity : Activity() {
                 applyTheme(i)
                 Hx.fire(it, S.HE_SETTING)
                 toast("Tema \"" + THEMES[i] + "\" aplicado")
+                // si cambió colores, Ajustes se repinta para verlos (y la muestra del tema de color se actualiza)
+                if (i == 0 || i == 1 || i == 3 || i == 4 || i == 5) stack.postDelayed({ if (!isFinishing) recreate() }, 250)
             }
             row.addView(chip, LinearLayout.LayoutParams(-2, -2).apply { rightMargin = dp(8f).toInt() })
         }
@@ -720,9 +771,12 @@ class SettingsActivity : Activity() {
     private fun applyTheme(i: Int) {
         val allSurf = S.SF_NAMES.indices
         fun glass(prop: Int, v: Float) { for (sf in allSurf) S.set(S.gp(sf, prop), v) }
+        // los temas rápidos que cambian colores dejan el tema de color como "personalizado"
+        if (i == 1 || i == 3 || i == 4 || i == 5) Prefs.colorTheme = -1
         when (i) {
             0 -> { // Liquid Glass (original): deshace todos los temas
                 for (cat in intArrayOf(S.C_GLASS, S.C_ICON, S.C_COLOR, S.C_HOME, S.C_DOCK, S.C_CLOCK, S.C_MOTION, S.C_STYLE, S.C_PERF)) S.reset(cat)
+                ColorThemes.apply(0)
                 Prefs.iconShape = 0
                 Prefs.clockStyle = 0
                 Prefs.labels = true
@@ -931,7 +985,7 @@ class SettingsActivity : Activity() {
         val g = GradientDrawable()
         g.cornerRadius = dp(26f)
         if (accent) {
-            g.colors = intArrayOf(0xFF4FA0FF.toInt(), 0xFF2F7BFF.toInt())
+            g.colors = intArrayOf(blend(OneColors.ACCENT, 0xFFFFFFFF.toInt(), 0.15f), blend(OneColors.ACCENT, 0xFF000000.toInt(), 0.12f))
             g.orientation = GradientDrawable.Orientation.TOP_BOTTOM
         } else {
             g.setColor(0x26FFFFFF)
@@ -1117,15 +1171,16 @@ class BackgroundView(ctx: Context) : View(ctx) {
     private val blob2 = Paint(Paint.ANTI_ALIAS_FLAG)
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
-        // 5 fondos: Noche azul, Morado, Negro puro, Océano, Atardecer
+        // 6 fondos: Noche azul, Morado, Negro puro, Océano, Atardecer, Bosque
         val sets = arrayOf(
             intArrayOf(0xFF0A1230.toInt(), 0xFF050816.toInt(), 0x663E91FF, 0x557C5CFF),
             intArrayOf(0xFF1E0B3A.toInt(), 0xFF0B0616.toInt(), 0x66B45CFF, 0x55FF4D8D),
             intArrayOf(0xFF000000.toInt(), 0xFF000000.toInt(), 0x223E91FF, 0x22FFFFFF),
             intArrayOf(0xFF032433.toInt(), 0xFF02101A.toInt(), 0x6622D3EE, 0x5514B8A6),
-            intArrayOf(0xFF2A0F1A.toInt(), 0xFF120610.toInt(), 0x66FB923C, 0x55F472B6)
+            intArrayOf(0xFF2A0F1A.toInt(), 0xFF120610.toInt(), 0x66FB923C, 0x55F472B6),
+            intArrayOf(0xFF06231A.toInt(), 0xFF03110C.toInt(), 0x6622C55E, 0x5514B8A6)
         )
-        val k = sets[S.i(S.L_SETTINGS_BG).coerceIn(0, 4)]
+        val k = sets[S.i(S.L_SETTINGS_BG).coerceIn(0, sets.size - 1)]
         base.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), k[0], k[1], Shader.TileMode.CLAMP)
         blob1.shader = RadialGradient(w * 0.15f, h * 0.12f, w * 0.9f, k[2], k[2] and 0x00FFFFFF, Shader.TileMode.CLAMP)
         blob2.shader = RadialGradient(w * 0.95f, h * 0.75f, w * 0.85f, k[3], k[3] and 0x00FFFFFF, Shader.TileMode.CLAMP)
@@ -1383,6 +1438,60 @@ class GridPreview(ctx: Context) : View(ctx) {
             c.drawPath(path, icon)
             c.restore()
         }
+    }
+}
+
+/**
+ * Muestra de un tema de color: una pantalla en miniatura con su degradado, un dock de cristal
+ * con puntos del color de acento y el nombre debajo.
+ */
+class ThemeSwatch(ctx: Context, private val idx: Int) : View(ctx) {
+    var picked = false
+    private val bg = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val p = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.DEFAULT, 500, false)
+    }
+    private val glass = Glass()
+    private val r = RectF()
+    private val d = RectF()
+    private val cols = ColorThemes.swatch(idx)
+
+    init {
+        foreground = null
+        isClickable = true
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
+        bg.shader = LinearGradient(0f, 0f, w.toFloat(), h * 0.8f, cols[0], cols[1], Shader.TileMode.CLAMP)
+    }
+
+    override fun onDraw(c: Canvas) {
+        val w = width.toFloat()
+        val cardH = height - dp(22f)
+        r.set(dp(4f), dp(4f), w - dp(4f), cardH)
+        c.drawRoundRect(r, dp(18f), dp(18f), bg)
+        // reloj de muestra
+        label.textSize = dp(17f)
+        label.alpha = 235
+        c.drawText("12:30", r.centerX(), r.top + dp(30f), label)
+        // dock de cristal con los puntos de acento
+        d.set(r.left + dp(10f), r.bottom - dp(30f), r.right - dp(10f), r.bottom - dp(10f))
+        glass.draw(c, d, dp(10f), 1f, false)
+        p.color = cols[2]
+        for (k in 0 until 3) c.drawCircle(d.left + d.width() * (0.25f + k * 0.25f), d.centerY(), dp(4f), p)
+        // anillo del elegido
+        if (picked) {
+            ring.color = cols[2]
+            ring.strokeWidth = dp(2.5f)
+            c.drawRoundRect(r.left - dp(2f), r.top - dp(2f), r.right + dp(2f), r.bottom + dp(2f), dp(20f), dp(20f), ring)
+        }
+        label.textSize = dp(12.5f)
+        label.alpha = if (picked) 255 else 200
+        c.drawText(ColorThemes.THEMES[idx].name, w / 2f, height - dp(5f), label)
     }
 }
 

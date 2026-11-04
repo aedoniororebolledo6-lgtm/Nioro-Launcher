@@ -188,8 +188,10 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
         val pick = S.col(S.L_SCRIM, 0)
         // "Automático" = degradado original azul noche
         val cols = if (pick == 0) intArrayOf(0xB3060A18.toInt(), 0x8C0A1230.toInt(), 0xCC050814.toInt()) else {
-            val c = pick and 0x00FFFFFF
-            intArrayOf(c or 0xB3000000.toInt(), c or 0x8C000000.toInt(), c or 0xCC000000.toInt())
+            // el color se oscurece mucho: tiñe el fondo sin quitar contraste a iconos y nombres
+            val c = blend(pick, 0xFF000000.toInt(), 0.74f) and 0x00FFFFFF
+            val c2 = blend(pick, 0xFF000000.toInt(), 0.86f) and 0x00FFFFFF
+            intArrayOf(c or 0xB3000000.toInt(), c or 0x8C000000.toInt(), c2 or 0xCC000000.toInt())
         }
         scrimShader = LinearGradient(0f, 0f, 0f, h, cols, floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
     }
@@ -432,6 +434,9 @@ class RecentsHost(ctx: Context) : FrameLayout(ctx) {
     }
 
     override fun onDraw(c: Canvas) {
+        // el fondo de recientes sigue el color de los paneles (temas de color)
+        val pick = S.col(S.L_SCRIM, 0)
+        scrim.color = if (pick == 0) 0xFF050814.toInt() else blend(pick, 0xFF000000.toInt(), 0.82f)
         scrim.alpha = (170 * clamp01(sp.value) * S.p(S.RC_DIM)).toInt().coerceIn(0, 255)
         c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), scrim)
     }
