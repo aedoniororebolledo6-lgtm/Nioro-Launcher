@@ -32,6 +32,8 @@ jobs:
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
       - name: Compilar (debug)
         run: gradle :app:assembleDebug --no-daemon --stacktrace
+      - name: Instalar ffmpeg (vídeos de las animaciones)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null
       - name: Activar KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -56,4 +58,4 @@ jobs:
           [ -f shots/report.txt ] || { mkdir -p shots; echo "Sin informe" > shots/report.txt; }
           gh release delete capturas --yes --cleanup-tag --repo "$GITHUB_REPOSITORY" || true
           gh release create capturas --repo "$GITHUB_REPOSITORY" --title "Capturas" --notes "Capturas automáticas de ${GITHUB_SHA::7}" --prerelease || true
-          for f in shots/*; do gh release upload capturas "$f" --clobber --repo "$GITHUB_REPOSITORY" || true; done
+          for f in shots/*.png shots/*.txt; do gh release upload capturas "$f" --clobber --repo "$GITHUB_REPOSITORY" || true; done

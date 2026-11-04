@@ -25,6 +25,8 @@ abstract class AppsView(ctx: Context) : View(ctx) {
         fun onMenu(e: AppEntry, anchor: RectF)
         fun onClose()
         fun onTouchStart()
+        /** cuánto se está tirando para cerrar (0..1): el fondo y la barra responden al dedo */
+        fun onPull(k: Float) {}
     }
 
     var listener: Listener? = null

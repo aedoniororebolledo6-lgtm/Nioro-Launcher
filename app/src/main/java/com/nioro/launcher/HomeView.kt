@@ -46,6 +46,8 @@ class HomeView(ctx: Context) : View(ctx) {
         fun gesture(g: Int)
         /** 0 = abrir alarmas (tocar reloj), 1 = abrir calendario (tocar fecha) */
         fun special(i: Int)
+        /** deslizar hacia arriba: la vista de apps sigue al dedo (0 empieza · 1 mueve · 2 suelta; p = 1 abrir) */
+        fun drawerDrag(stage: Int, p: Float, velocity: Float) {}
     }
 
     class Slot(val kind: Int, val key: String?) { // 0 app, 1 launchpad, 2 recientes, 3 separador
@@ -248,6 +250,9 @@ class HomeView(ctx: Context) : View(ctx) {
     private var pressArea = S.IA_HOME
     // multitáctil y toques múltiples
     private val M_MULTI = 5
+    /** deslizar hacia arriba con la vista de apps siguiendo al dedo */
+    private val M_DRAWER = 6
+    private val drawerDragDist: Float get() = dp(340f) * S.p(S.G_SWIPE_DIST)
     private var multiDone = false
     private var y0avg = 0f
     private var d0 = 0f
@@ -2558,7 +2563,9 @@ class HomeView(ctx: Context) : View(ctx) {
 
     private fun settle(v: Float) {
         val n = pageCount() - 1
-        val raw = (pageSp.value + v * 0.25f).roundToInt()
+        // como en iPhone: un gesto pasa como mucho una pantalla, por rápido que sea
+        val start = pageStart.roundToInt()
+        val raw = (pageSp.value + v * 0.25f).roundToInt().coerceIn(start - 1, start + 1)
         var target = raw.coerceIn(0, n)
         if (S.b(S.PAGE_LOOP) && n > 0) {
             if (raw > n && pageStart.roundToInt() == n) target = 0
@@ -2787,6 +2794,15 @@ class HomeView(ctx: Context) : View(ctx) {
                         cancelLong()
                         moved = true
                         touchMode = if (abs(dx) > abs(dy)) M_PAGE else M_VSWIPE
+                        // hacia arriba y con la acción "vista de apps": la vista sigue al dedo desde el primer momento
+                        if (touchMode == M_VSWIPE && dy < 0f && S.gestAction(S.G_UP) == S.A_DRAWER) {
+                            touchMode = M_DRAWER
+                            host?.drawerDrag(0, 0f, 0f)
+                        }
+                    }
+                    if (touchMode == M_DRAWER) {
+                        host?.drawerDrag(1, clamp01(-dy / drawerDragDist), 0f)
+                        return true
                     }
                     if (touchMode == M_PAGE) {
                         if (dotsBoost.target < 1f) {
@@ -2816,6 +2832,15 @@ class HomeView(ctx: Context) : View(ctx) {
                 vt?.addMovement(ev)
                 when (touchMode) {
                     M_MULTI -> finishMulti()
+                    M_DRAWER -> {
+                        vt?.computeCurrentVelocity(1000)
+                        val vy = vt?.yVelocity ?: 0f
+                        val p = clamp01(-(y - downY) / drawerDragDist)
+                        // se abre si pasó un tercio del recorrido o si el gesto fue rápido hacia arriba
+                        val open = !cancelled && (p > 0.32f || vy < -900f) && vy < 600f
+                        if (open) Hx.gesture(this, S.G_UP)
+                        host?.drawerDrag(2, if (open) 1f else 0f, -vy / drawerDragDist)
+                    }
                     M_DRAG -> finishDrag(x, y)
                     M_PAGE -> {
                         vt?.computeCurrentVelocity(1000)

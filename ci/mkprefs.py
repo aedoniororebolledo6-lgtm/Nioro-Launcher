@@ -5,6 +5,8 @@ import sys
 from xml.sax.saxutils import escape
 
 acts, style, out = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+# 4.º argumento "paginas": inicio con dos pantallas (6 apps, huecos y otras 6) para probar el paso de página
+pages = len(sys.argv) > 4 and sys.argv[4] == "paginas"
 keys = []
 for line in open(acts, encoding="utf-8", errors="ignore"):
     line = line.strip()
@@ -18,6 +20,8 @@ for line in open(acts, encoding="utf-8", errors="ignore"):
         keys.append(k)
 dock = keys[:4]
 home = keys[4:16]
+if pages:
+    home = keys[4:10] + ["."] * 18 + keys[10:16]
 nl = "&#10;"
 xml = ["<?xml version='1.0' encoding='utf-8' standalone='yes' ?>", "<map>",
        '    <boolean name="seeded" value="true" />',

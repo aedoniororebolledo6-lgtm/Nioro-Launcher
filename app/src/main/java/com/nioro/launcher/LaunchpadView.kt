@@ -98,6 +98,8 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
     }
 
     override fun onFrame(dt: Float): Boolean {
+        // el contenedor (fondo, barra, inicio detrás) sigue a lo que se tira hacia abajo
+        listener?.onPull(clamp01(max(0f, pull.value) / max(1f, height * 0.45f)))
         invalidate()
         return false
     }
@@ -237,6 +239,7 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
                 } else if (mode == 2) {
                     // el contenido sigue al dedo
                     pull.snap(max(0f, dy - slop))
+                    listener?.onPull(clamp01(pull.value / max(1f, height * 0.45f)))
                     invalidate()
                 }
                 return true
@@ -249,7 +252,9 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
                 vt?.computeCurrentVelocity(1000)
                 if (mode == 1) {
                     val v = -(vt?.xVelocity ?: 0f) / width
-                    val target = (pageSp.value + v * 0.25f).roundToInt().coerceIn(0, pageCount() - 1)
+                    // un gesto pasa como mucho una página
+                    val ps = pageStart.roundToInt()
+                    val target = (pageSp.value + v * 0.25f).roundToInt().coerceIn(ps - 1, ps + 1).coerceIn(0, pageCount() - 1)
                     if (target != pageStart.roundToInt()) Hx.fire(this, S.HE_PAGE)
                     pageSp.to(target.toFloat())
                     pageSp.velocity = v
