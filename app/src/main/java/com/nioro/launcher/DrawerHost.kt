@@ -314,7 +314,6 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
 
     fun close() {
         if (!isOpen) return
-        android.util.Log.w("NioroDbg", "drawer.close", Throwable())
         isOpen = false
         hideKeyboard()
         search.clearFocus()
@@ -324,7 +323,6 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
     }
 
     fun closeNow() {
-        if (isOpen) android.util.Log.w("NioroDbg", "drawer.closeNow", Throwable())
         isOpen = false
         hideKeyboard()
         sp.snap(0f)
