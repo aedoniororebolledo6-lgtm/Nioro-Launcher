@@ -262,7 +262,10 @@ class MainActivity : Activity() {
         if (p > 0.001f) {
             if (blurOn && !backdrop.tried) backdrop.capture(home)
             backdrop.progress = p
-            home.alpha = if (backdrop.hasSnapshot) 1f - p else 1f - 0.35f * p
+            // vistas a pantalla completa: el inicio se desvanece casi del todo para que sus iconos
+            // no se mezclen con los del cajón mientras sube con el dedo (rejilla y abanico lo dejan ver)
+            val keep = if (recentsP > drawerP || Prefs.drawerStyle == 1 || Prefs.drawerStyle == 2) 0.35f else 0.85f
+            home.alpha = if (backdrop.hasSnapshot) 1f - p else 1f - keep * p
         } else {
             backdrop.release()
             home.alpha = 1f
