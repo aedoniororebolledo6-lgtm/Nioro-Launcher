@@ -40,6 +40,9 @@ El usuario quiere que **las actualizaciones le lleguen solas**. El flujo:
 - `SettingsActivity.kt`, `Ui.kt`, `PreviewView.kt` — pantalla de Ajustes. `Updater.kt` — actualizador. `Compat.kt` — Android 10–14.
 
 ## Reglas de la casa
+- **Siempre** al terminar un cambio: revisión de errores y entrega al usuario la **lista ordenada de más a
+  menos importante**, arreglarlos en ese orden, y luego subir (PR + fusionar).
+- Temas de color: `Themes.kt` (`ColorThemes`); tiñen cristal, acento, paneles, fondo de Ajustes, puntos y reloj.
 - Toda vibración pasa por `Hx.fire(view, S.HE_*)` (o `Hx.gesture`): nunca `performHapticFeedback` directo,
   así respeta los ajustes de Vibración.
 - Un panel cerrado o casi invisible no debe recibir toques (ver `dispatchTouchEvent` en `DrawerHost.kt`):

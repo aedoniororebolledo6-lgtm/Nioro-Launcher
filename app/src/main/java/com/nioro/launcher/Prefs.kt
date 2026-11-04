@@ -69,6 +69,8 @@ object Prefs {
     var recentsAnim by IntPref("recentsAnim", 0)
     var drawerStyle by IntPref("drawerStyle", 0)
     var clockStyle by IntPref("clockStyle", 0)
+    /** tema de color elegido (ColorThemes); -1 = personalizado */
+    var colorTheme by IntPref("colorTheme", 0)
     var iconShape by IntPref("iconShape", 0)
     var rows by IntPref("rows", 0)          // 0 = automático
     var drawerCols by IntPref("drawerCols", 4)
