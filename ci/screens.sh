@@ -63,10 +63,10 @@ hold() { timeout 20 adb shell input swipe "$1" "$2" "$1" "$2" 1300; }
 
   # 7) cajón a mitad de gesto: el dedo se queda quieto a media subida
   prefs 0; start
-  timeout 10 adb shell input motionevent DOWN 540 1500
-  for yy in 1460 1420 1370 1320 1270 1220 1170; do timeout 10 adb shell input motionevent MOVE 540 $yy; done
-  shot 12_cajon_a_mitad 1
-  timeout 10 adb shell input motionevent UP 540 1170; sleep 2; back
+  # (un deslizamiento lento de 3 s en segundo plano; la captura se hace con el dedo aún abajo)
+  timeout 20 adb shell input swipe 540 1700 540 1000 3000 &
+  SW=$!; sleep 1.8; timeout 20 adb exec-out screencap -p > shots/12_cajon_a_mitad.png; echo "captura 12_cajon_a_mitad"
+  wait $SW; sleep 2; back
   # 5) menú contextual de un icono del inicio (mantener pulsado el primero)
   prefs 0; start; hold 135 700; shot 09_menu_icono; back
   echo "== errores graves"
