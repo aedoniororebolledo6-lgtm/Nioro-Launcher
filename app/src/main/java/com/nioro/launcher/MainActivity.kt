@@ -209,11 +209,13 @@ class MainActivity : Activity() {
     }
 
     override fun onPause() {
+        android.util.Log.w("NioroDbg", "onPause")
         resumed = false
         super.onPause()
     }
 
     override fun onStop() {
+        android.util.Log.w("NioroDbg", "onStop")
         wasStopped = true
         home.pauseClock()
         menu.dismiss()
