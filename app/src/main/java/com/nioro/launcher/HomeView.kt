@@ -2389,7 +2389,7 @@ class HomeView(ctx: Context) : View(ctx) {
             val col = blend((act and 0x00FFFFFF) or ((255 * idle).toInt() shl 24), act, near)
             val x = x0 + i * gap
             if (i == 0 && S.b(S.D_HOME)) {
-                Glyphs.draw(c, Glyphs.HOME, x, y, dp(11f) * k, col)
+                Glyphs.draw(c, Glyphs.HOME, x, y, dp(11f) * k, col, vis)
                 continue
             }
             dotPaint.color = col
