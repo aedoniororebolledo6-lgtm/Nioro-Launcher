@@ -173,7 +173,7 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
         c.save()
         c.scale(sx, sy, ax, pivotY)
         // pico unido al panel (redondeado), con el mismo cristal
-        if (S.b(S.GRID_NUB)) {
+        if (S.b(S.GRID_NUB) && !keyboardUp) { // con el teclado abierto el pico no apunta al dock: se oculta
             nubPath.reset()
             nubPath.moveTo(ax - dp(16f), panel.bottom - dp(2f))
             nubPath.cubicTo(ax - dp(7f), panel.bottom - dp(2f), ax - dp(4f), panel.bottom + dp(11f), ax, panel.bottom + dp(12f))
