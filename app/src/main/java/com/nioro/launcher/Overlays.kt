@@ -157,6 +157,8 @@ class MenuView(ctx: Context) : View(ctx) {
     private val headDst = RectF()
     private val headPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val hiRect = RectF()
+    private val boxPath = android.graphics.Path()
+    private val backing = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF141A2E.toInt() }
     /** el resaltado se desliza hasta la opción tocada y aparece/desaparece suave */
     private val hiY = SpringValue(0f, 700f, 45f, 0.3f)
     private val hiA = SpringValue(0f, 600f, 45f, 0.003f)
@@ -219,6 +221,10 @@ class MenuView(ctx: Context) : View(ctx) {
         val py = if (above) box.bottom else box.top
         c.save()
         c.scale(s, s, anchor.centerX().coerceIn(box.left, box.right), py)
+        // base oscura y casi opaca bajo el cristal: los iconos de detrás ya no se ven a través del texto
+        Squircle.path(boxPath, box, dp(24f))
+        backing.alpha = (205 * a).toInt().coerceIn(0, 255)
+        c.drawPath(boxPath, backing)
         glass.draw(c, box, dp(24f), a, true, S.SF_MENU)
         val base = text.textSize
         // cabecera: icono de la app + nombre
@@ -244,7 +250,7 @@ class MenuView(ctx: Context) : View(ctx) {
         val anyGlyph = items.any { it.glyph >= 0 }
         for (i in items.indices) {
             // las opciones entran escalonadas, una detrás de otra
-            val q = clamp01(p * 1.5f - i * 0.1f)
+            val q = clamp01(p * 1.5f - min(i, 5) * 0.1f)
             val top = box.top + headH + i * rowH + (1f - q) * dp(10f)
             sep.alpha = (48 * a * q).toInt()
             c.drawLine(box.left + dp(16f), top, box.right - dp(16f), top, sep)

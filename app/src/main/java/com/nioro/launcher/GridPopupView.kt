@@ -153,7 +153,7 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
     override fun onDraw(c: Canvas) {
         val p = progress
         val a = clamp01(p * 1.7f)
-        val ax = (if (anchorX > 0f) anchorX else width / 2f).coerceIn(panel.left + dp(44f), panel.right - dp(44f))
+        val ax = (if (anchorX > 0f) anchorX else width / 2f).coerceIn(panel.left + dp(64f), panel.right - dp(64f))
         val pivotY = panel.bottom + dp(14f)
         // se abre desde el pico como una gota: primero a lo ancho y luego a lo alto
         // (en reposo, p = 1, las dos escalas valen exactamente 1: antes el ancho quedaba en 1,04 y se salía)
@@ -209,7 +209,7 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
                 // cascada: fila a fila (y un poco por columna) los iconos llegan inflándose
                 val row = i / cols - first / cols
                 val col = i % cols
-                val q = clamp01(p * 1.7f - row * 0.07f - col * 0.025f - 0.1f)
+                val q = clamp01(p * 1.7f - min(row, 6) * 0.07f - col * 0.025f - 0.1f)
                 val sc = lerp(0.55f, 1f, pop(q))
                 val e = shown[i]
                 val ia = a * clamp01(q * 1.6f)

@@ -157,7 +157,8 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
             val h = if (r.entry == null) headH else rowH
             if (y + h < panel.top || y > panel.bottom) continue
             // entrada escalonada desde la derecha
-            val q = clamp01((p * 1.7f - shownIdx * 0.07f))
+            // el escalonado se limita: en reposo (p = 1) todas las filas llegan a su sitio
+            val q = clamp01(p * 1.7f - min(shownIdx, 10) * 0.07f)
             shownIdx++
             val ox = (1f - q) * dp(60f)
             val al = clamp01(q * 1.4f)

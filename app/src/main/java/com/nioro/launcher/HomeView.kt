@@ -1046,7 +1046,8 @@ class HomeView(ctx: Context) : View(ctx) {
         if (ed < 0.999f) {
             c.save()
             c.translate(0f, ed * dp(70f))
-            dockFade = 1f - clamp01(ed * 1.4f)
+            // con el menú del reloj abierto el dock se aparta (si no, se transparenta por el panel)
+            dockFade = (1f - clamp01(ed * 1.4f)) * (1f - clamp01(clockEd.value * 1.6f))
             drawDock(c, enterOn)
             dockFade = 1f
             c.restore()
@@ -1224,7 +1225,7 @@ class HomeView(ctx: Context) : View(ctx) {
         val lift = (1f - ce) * (sh + dp(60f)) + max(0f, sheetPull.value)
         sheetRect.set(left, bottom - sh + lift, right, bottom + lift)
         chipFill.color = 0xFF0B1124.toInt()
-        chipFill.alpha = (120 * a).toInt()
+        chipFill.alpha = (175 * a).toInt()
         c.drawRoundRect(sheetRect, dp(34f), dp(34f), chipFill)
         glass.draw(c, sheetRect, dp(34f), a, true, S.SF_DOCK)
         c.save()
@@ -2302,7 +2303,7 @@ class HomeView(ctx: Context) : View(ctx) {
                 drawIconAt(c, e, cx, cy, iconPx * sc, al, true)
                 if (ed > 0.01f) {
                     // botón "−" para quitar el icono: aparecen en cascada, inflándose
-                    val bq = pop(clamp01((ed - 0.1f - local * 0.02f) / 0.5f))
+                    val bq = pop(clamp01((ed - 0.1f - min(local, 15) * 0.02f) / 0.5f))
                     val ba = clamp01(bq * 1.5f) * al
                     val bx = cx - iconPx * sc / 2f + dp(3f)
                     val by = cy - iconPx * sc / 2f + dp(3f)
