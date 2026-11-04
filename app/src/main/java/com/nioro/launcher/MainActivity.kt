@@ -275,7 +275,8 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
         try {
             if (!windowManager.isCrossWindowBlurEnabled) return
-            val r = (p * dp(34f)).toInt() / 3 * 3
+            // pasos de 6 px: cambiar el desenfoque de la ventana cuesta, así hay menos cambios y va más fluido
+            val r = (p * dp(34f)).toInt() / 6 * 6
             if (r != lastBlur.toInt()) {
                 lastBlur = r.toFloat()
                 window.setBackgroundBlurRadius(r)
@@ -487,6 +488,16 @@ class MainActivity : Activity() {
         override fun openDrawer() {
             menu.dismiss()
             drawer.open(home.launchpadX())
+        }
+        override fun drawerDrag(stage: Int, p: Float, velocity: Float) {
+            when (stage) {
+                0 -> {
+                    menu.dismiss()
+                    drawer.beginDrag(home.launchpadX())
+                }
+                1 -> drawer.dragTo(p)
+                else -> drawer.endDrag(p >= 0.5f, velocity)
+            }
         }
         override fun openRecents() {
             menu.dismiss()

@@ -146,7 +146,8 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
         val t = if (up) 1f else 0f
         if (islandSp.target != t) {
             // baja (o sube) con rebote, como una gota
-            Mo.tune(islandSp, S.MO_MENU, 300f, if (up) 0.55f else 0.8f)
+            // como una gota de agua: cae más despacio, y al llegar salpica y se asienta
+            if (up) Mo.tune(islandSp, S.MO_MENU, 135f, 0.48f) else Mo.tune(islandSp, S.MO_MENU, 160f, 0.78f)
             islandSp.to(t)
             ticker.kick()
         }
@@ -166,11 +167,13 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
         val restTop = insetTop + dp(16f)
         val islandTop = height - islandIme - dp(12f) - ISLAND_H
         search.translationY = (1f - a) * -dp(30f) + (islandTop - restTop) * q
-        // por el camino se estira como una gota; al llegar es un poco más estrecha (isla)
-        val jelly = kotlin.math.sin(clamp01(q) * Math.PI.toFloat())
+        // gota de agua: mientras cae se alarga y se afina según su velocidad; al llegar (cuando el
+        // resorte se pasa un poco) se aplasta a lo ancho como una gota que choca, y se asienta
         val enter = lerp(0.9f, 1f, a)
-        search.scaleX = enter * lerp(1f, 0.92f, q) * (1f + 0.05f * jelly)
-        search.scaleY = enter * (1f - 0.08f * jelly)
+        val stretch = clamp01(kotlin.math.abs(islandSp.velocity) * 0.075f) * 0.26f
+        val splash = kotlin.math.max(0f, q - 1f)
+        search.scaleX = enter * lerp(1f, 0.92f, clamp01(q)) * (1f - stretch * 0.5f + splash * 1.5f)
+        search.scaleY = enter * (1f + stretch - splash * 1.3f)
         search.translationZ = dp(6f) * clamp01(q)
     }
 
@@ -259,6 +262,40 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
     }
 
     fun open(anchor: Float) {
+        prepareOpen(anchor)
+        if (S.b(S.DR_KEYBOARD) && S.b(S.DR_SEARCH)) showKeyboard()
+        sp.to(1f)
+        ticker.kick()
+    }
+
+    /** empieza a abrirse siguiendo al dedo (deslizar hacia arriba en el inicio) */
+    fun beginDrag(anchor: Float) {
+        prepareOpen(anchor)
+        sp.snap(sp.value)
+        ticker.kick()
+    }
+
+    fun dragTo(p: Float) {
+        if (!isOpen) return
+        sp.snap(p)
+        ticker.kick()
+    }
+
+    /** el dedo se soltó: termina de abrirse (o vuelve a cerrarse) con la velocidad que llevaba */
+    fun endDrag(open: Boolean, velocity: Float) {
+        if (open) {
+            Mo.tune(sp, S.MO_DRAWER_OPEN, 230f, 0.82f)
+            sp.velocity = velocity
+            sp.to(1f)
+            ticker.kick()
+            if (S.b(S.DR_KEYBOARD) && S.b(S.DR_SEARCH)) showKeyboard()
+        } else {
+            close()
+            sp.velocity = velocity
+        }
+    }
+
+    private fun prepareOpen(anchor: Float) {
         anchorX = anchor
         ensureView()
         val v = view ?: return
@@ -280,10 +317,7 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
             search.background = GlassDrawable(22f, 1f, S.SF_SEARCH)
             rebuildScrim()
             Hx.fire(this, S.HE_PANEL)
-            if (S.b(S.DR_KEYBOARD) && S.b(S.DR_SEARCH)) showKeyboard()
         }
-        sp.to(1f)
-        ticker.kick()
     }
 
     /**

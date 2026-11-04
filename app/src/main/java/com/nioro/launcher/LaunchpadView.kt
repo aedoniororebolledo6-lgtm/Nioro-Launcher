@@ -249,7 +249,9 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
                 vt?.computeCurrentVelocity(1000)
                 if (mode == 1) {
                     val v = -(vt?.xVelocity ?: 0f) / width
-                    val target = (pageSp.value + v * 0.25f).roundToInt().coerceIn(0, pageCount() - 1)
+                    // un gesto pasa como mucho una página
+                    val ps = pageStart.roundToInt()
+                    val target = (pageSp.value + v * 0.25f).roundToInt().coerceIn(ps - 1, ps + 1).coerceIn(0, pageCount() - 1)
                     if (target != pageStart.roundToInt()) Hx.fire(this, S.HE_PAGE)
                     pageSp.to(target.toFloat())
                     pageSp.velocity = v

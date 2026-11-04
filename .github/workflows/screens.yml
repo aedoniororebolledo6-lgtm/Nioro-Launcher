@@ -56,4 +56,4 @@ jobs:
           [ -f shots/report.txt ] || { mkdir -p shots; echo "Sin informe" > shots/report.txt; }
           gh release delete capturas --yes --cleanup-tag --repo "$GITHUB_REPOSITORY" || true
           gh release create capturas --repo "$GITHUB_REPOSITORY" --title "Capturas" --notes "Capturas automáticas de ${GITHUB_SHA::7}" --prerelease || true
-          for f in shots/*; do gh release upload capturas "$f" --clobber --repo "$GITHUB_REPOSITORY" || true; done
+          for f in shots/*.png shots/*.txt; do gh release upload capturas "$f" --clobber --repo "$GITHUB_REPOSITORY" || true; done

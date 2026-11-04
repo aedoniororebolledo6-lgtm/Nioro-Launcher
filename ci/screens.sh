@@ -10,7 +10,7 @@ adb logcat -c
 shot() { sleep "${2:-3}"; timeout 30 adb exec-out screencap -p > "shots/$1.png"; echo "captura $1"; }
 prefs() {
   timeout 20 adb shell am force-stop $P
-  python3 ci/mkprefs.py acts.txt "$1" prefs.xml
+  python3 ci/mkprefs.py acts.txt "$1" prefs.xml $2
   timeout 30 adb push prefs.xml /data/local/tmp/nl.xml > /dev/null 2>&1
   timeout 30 adb shell "chmod 644 /data/local/tmp/nl.xml; run-as $P mkdir -p shared_prefs; run-as $P cp /data/local/tmp/nl.xml shared_prefs/nioro_launcher.xml"
 }
@@ -40,6 +40,27 @@ hold() { timeout 20 adb shell input swipe "$1" "$2" "$1" "$2" 1300; }
   adb logcat -d -s NioroDbg:W AndroidRuntime:E | tail -n 60
   back; back
   prefs 0; start; swipe_up; sleep 2; timeout 20 adb shell input tap 540 255; sleep 2; shot 11_launchpad_teclado 3; back; back
+  # 6) vídeos de las animaciones: cada uno se convierte en una tira de fotogramas (10 por segundo)
+  rec() {
+    n=$1; shift
+    timeout 25 adb shell "screenrecord --time-limit 3 --size 540x1170 --bit-rate 6000000 /sdcard/$n.mp4" &
+    RP=$!; sleep 1; "$@"; wait $RP; sleep 1
+    timeout 30 adb pull /sdcard/$n.mp4 shots/$n.mp4 > /dev/null 2>&1
+    ffmpeg -loglevel error -y -i shots/$n.mp4 -vf "fps=10,scale=180:-1,tile=10x3" -frames:v 1 "shots/$n.png" && echo "video $n"
+  }
+  g_paginas() { timeout 20 adb shell input swipe 900 1300 150 1300 260; sleep 1.1; timeout 20 adb shell input swipe 150 1300 900 1300 260; }
+  g_abrir_lento() { timeout 20 adb shell input swipe 540 1750 540 950 900; }
+  g_cerrar_tirando() { timeout 20 adb shell input swipe 540 700 540 1650 420; }
+  g_tocar_fuera() { timeout 20 adb shell input tap 540 2050; }
+  g_lista_fling() { timeout 20 adb shell input swipe 540 1700 540 700 140; }
+  g_gota() { timeout 20 adb shell input tap 540 255; }
+  prefs 0 paginas; start; rec v1_paginas_inicio g_paginas
+  rec v2_abrir_cajon_dedo g_abrir_lento
+  rec v3_cerrar_tirando g_cerrar_tirando
+  prefs 2; start; swipe_up; sleep 2; rec v4_rejilla_cerrar g_tocar_fuera
+  prefs 3; start; swipe_up; sleep 2; rec v5_lista_fling g_lista_fling; back
+  prefs 2; start; swipe_up; sleep 2; rec v6_gota_busqueda g_gota; back; back
+
   # 5) menú contextual de un icono del inicio (mantener pulsado el primero)
   prefs 0; start; hold 135 700; shot 09_menu_icono; back
   echo "== errores graves"
