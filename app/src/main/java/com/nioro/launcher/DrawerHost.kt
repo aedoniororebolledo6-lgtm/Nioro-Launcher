@@ -49,6 +49,10 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
     private val emptyGlass = Glass()
     /** "Sin resultados" aparece y se va con un fundido (y un pequeño crecimiento) */
     private val emptySp = SpringValue(0f, 320f, 26f, 0.003f)
+    /** isla de búsqueda: 0 = barra arriba, 1 = isla flotando sobre el teclado */
+    private val islandSp = SpringValue(0f, 320f, 22f, 0.002f)
+    /** alto del teclado con el que se colocó la isla (se conserva mientras vuelve arriba) */
+    private var islandIme = 0f
     private var emptyQuery = ""
     private var scrimShader: LinearGradient? = null
     private var insetTop = 0f
@@ -62,6 +66,7 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
         setWillNotDraw(false)
         ticker.add(sp)
         ticker.add(emptySp)
+        ticker.add(islandSp)
         visibility = GONE
         search.hint = "Buscar"
         search.setHintTextColor(0xB3FFFFFF.toInt())
@@ -102,10 +107,6 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
             }
         }
         // al tocar la barra crece un poco con rebote
-        search.setOnFocusChangeListener { v, f ->
-            v.animate().scaleX(if (f) 1.03f else 1f).scaleY(if (f) 1.03f else 1f)
-                .setInterpolator(android.view.animation.OvershootInterpolator(2.2f)).setDuration(260).start()
-        }
         search.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
@@ -140,9 +141,37 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
     fun setIme(px: Float) {
         if (kotlin.math.abs(px - imeInset) < 0.5f) return
         imeInset = px
+        val up = px > insetBottom + dp(60f)
+        if (up) islandIme = px
+        val t = if (up) 1f else 0f
+        if (islandSp.target != t) {
+            // baja (o sube) con rebote, como una gota
+            Mo.tune(islandSp, S.MO_MENU, 300f, if (up) 0.55f else 0.8f)
+            islandSp.to(t)
+            ticker.kick()
+        }
+        placeIsland()
         val v = view ?: return
-        v.imeInset = px
+        // con la isla abajo, las apps se quedan por encima de la isla (no solo del teclado)
+        v.imeInset = if (up) px + ISLAND_H + dp(20f) else px
         v.onImeChanged()
+    }
+
+    private val ISLAND_H: Float get() = dp(48f)
+
+    /** coloca la barra: arriba, o como isla justo encima del teclado según su altura */
+    private fun placeIsland() {
+        val a = clamp01(sp.value)
+        val q = islandSp.value
+        val restTop = insetTop + dp(16f)
+        val islandTop = height - islandIme - dp(12f) - ISLAND_H
+        search.translationY = (1f - a) * -dp(30f) + (islandTop - restTop) * q
+        // por el camino se estira como una gota; al llegar es un poco más estrecha (isla)
+        val jelly = kotlin.math.sin(clamp01(q) * Math.PI.toFloat())
+        val enter = lerp(0.9f, 1f, a)
+        search.scaleX = enter * lerp(1f, 0.92f, q) * (1f + 0.05f * jelly)
+        search.scaleY = enter * (1f - 0.08f * jelly)
+        search.translationZ = dp(6f) * clamp01(q)
     }
 
     fun setInsets(top: Float, bottom: Float) {
@@ -323,13 +352,8 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
         }
         val a = clamp01(p)
         search.alpha = a
-        search.translationY = (1f - a) * -dp(30f)
-        if (!search.hasFocus()) {
-            // la barra entra desde arriba creciendo, con el resorte de la vista de apps
-            val s = lerp(0.9f, 1f, clamp01(p))
-            search.scaleX = s
-            search.scaleY = s
-        }
+        // la barra entra desde arriba creciendo, y con el teclado se vuelve isla
+        placeIsland()
         callback?.onProgress(a)
         invalidate()
         if (!sp.active && !isOpen && p <= 0.001f) {
@@ -359,7 +383,8 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
         if (e < 0.01f) return
         val a = clamp01(sp.value) * clamp01(e)
         val cx = width / 2f
-        val cy = height * 0.42f
+        val freeBottom = if (islandSp.target > 0.5f) height - islandIme - ISLAND_H - dp(20f) else height * 0.84f
+        val cy = (insetTop + dp(80f) + freeBottom) / 2f - dp(30f)
         val r = dp(34f) * e
         emptyRect.set(cx - r, cy - r, cx + r, cy + r)
         emptyGlass.draw(c, emptyRect, r, a * 0.8f, true, S.SF_SEARCH)

@@ -113,7 +113,7 @@ class FanView(ctx: Context) : AppsView(ctx) {
     override fun onDraw(c: Canvas) {
         if (shown.isEmpty()) return
         val p = progress
-        val topLimit = insetTop + dp(70f)
+        val topLimit = insetTop + (if (keyboardUp) dp(16f) else dp(70f))
         // se dibuja de arriba (lejos) hacia abajo (cerca del dock)
         for (i in shown.size - 1 downTo 0) {
             val dist0 = i * step - scroll.value

@@ -63,7 +63,7 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
         if (w <= 0f) return
         cols = Prefs.drawerCols.coerceIn(3, 6)
         iconSize = dp(Prefs.iconDp.toFloat() + 2f)
-        top = insetTop + dp(84f)
+        top = insetTop + (if (keyboardUp) dp(24f) else dp(84f))
         dotsY = h - bottomInset - (if (keyboardUp) dp(22f) else dp(40f))
         val avail = dotsY - dp(20f) - top
         val minCell = iconSize + dp(36f) + dp(10f)
