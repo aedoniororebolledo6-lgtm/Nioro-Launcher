@@ -33,6 +33,9 @@ hold() { timeout 20 adb shell input swipe "$1" "$2" "$1" "$2" 1300; }
   prefs 3; start; swipe_up; shot 06_lista; back
   prefs 1; start; swipe_up; shot 07_abanico; back
   prefs 4; start; swipe_up; shot 08_gravedad 5; back
+  # teclado abierto: los resultados deben quedar por encima del teclado
+  prefs 2; start; swipe_up; sleep 2; timeout 20 adb shell input tap 540 176; sleep 2; timeout 20 adb shell input text c; shot 10_rejilla_teclado 3; back; back
+  prefs 0; start; swipe_up; sleep 2; timeout 20 adb shell input tap 540 176; sleep 2; shot 11_launchpad_teclado 3; back; back
   # 5) menú contextual de un icono del inicio (mantener pulsado el primero)
   prefs 0; start; hold 135 700; shot 09_menu_icono; back
   echo "== errores graves"

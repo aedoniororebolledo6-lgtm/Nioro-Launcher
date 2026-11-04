@@ -55,6 +55,10 @@ object Compat {
         }
     }
 
+    /** alto del teclado en pantalla (0 si está cerrado o en Android 10) */
+    fun ime(ins: WindowInsets): Int =
+        if (Build.VERSION.SDK_INT >= 30) ins.getInsets(WindowInsets.Type.ime()).bottom else 0
+
     /** (arriba, abajo) de las barras del sistema. */
     fun bars(ins: WindowInsets): Pair<Int, Int> {
         return if (Build.VERSION.SDK_INT >= 30) {

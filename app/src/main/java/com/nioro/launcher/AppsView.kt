@@ -31,6 +31,14 @@ abstract class AppsView(ctx: Context) : View(ctx) {
     var progress = 0f
     var insetTop = 0f
     var insetBottom = 0f
+    /** alto del teclado (px, desde abajo): con el teclado abierto las vistas suben por encima */
+    var imeInset = 0f
+    /** borde de abajo útil: la barra del sistema o el teclado, lo que sea más alto */
+    protected val bottomInset: Float get() = maxOf(insetBottom, imeInset)
+    protected val keyboardUp: Boolean get() = imeInset > insetBottom + 1f
+
+    /** el teclado aparece/desaparece (se llama en cada fotograma de su animación) */
+    open fun onImeChanged() {}
     var anchorX = 0f
 
     protected var apps: List<AppEntry> = emptyList()

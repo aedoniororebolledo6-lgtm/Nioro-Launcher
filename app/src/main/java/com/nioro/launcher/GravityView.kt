@@ -80,6 +80,14 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
         destroy()
     }
 
+    private val imeRebuild = Runnable { if (progress > 0.01f) build() }
+
+    /** el suelo sube sobre el teclado (se reconstruye cuando el teclado termina de moverse) */
+    override fun onImeChanged() {
+        uiHandler.removeCallbacks(imeRebuild)
+        uiHandler.postDelayed(imeRebuild, 160)
+    }
+
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
         super.onSizeChanged(w, h, ow, oh)
         if (progress > 0.01f) build()
@@ -103,7 +111,7 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
         wd.setAllowSleep(true)
         world = wd
         val wm = w / ppm
-        val floor = (h - insetBottom - dp(104f)) / ppm
+        val floor = (h - bottomInset - (if (keyboardUp) dp(16f) else dp(104f))) / ppm
         val topWall = (insetTop + dp(60f)) / ppm
 
         fun wall(cx: Float, cy: Float, hx: Float, hy: Float) {

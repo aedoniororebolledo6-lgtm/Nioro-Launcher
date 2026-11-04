@@ -134,6 +134,17 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
         }
     }
 
+    private var imeInset = 0f
+
+    /** alto del teclado: la vista de apps sube por encima para que no tape los resultados */
+    fun setIme(px: Float) {
+        if (kotlin.math.abs(px - imeInset) < 0.5f) return
+        imeInset = px
+        val v = view ?: return
+        v.imeInset = px
+        v.onImeChanged()
+    }
+
     fun setInsets(top: Float, bottom: Float) {
         insetTop = top
         insetBottom = bottom
@@ -164,6 +175,7 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
         viewStyle = st
         v.insetTop = insetTop
         v.insetBottom = insetBottom
+        v.imeInset = imeInset
         v.listener = object : AppsView.Listener {
             override fun onLaunch(e: AppEntry, from: RectF) { callback?.onLaunch(e, from) }
             override fun onMenu(e: AppEntry, anchor: RectF) { callback?.onMenu(e, anchor) }
