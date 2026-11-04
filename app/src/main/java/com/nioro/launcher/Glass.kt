@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.RectF
 import android.graphics.Shader
 
@@ -17,6 +18,70 @@ fun clamp01(v: Float): Float = if (v < 0f) 0f else if (v > 1f) 1f else v
 fun smooth(a: Float, b: Float, x: Float): Float {
     val t = clamp01((x - a) / (b - a))
     return t * t * (3f - 2f * t)
+}
+
+/**
+ * Esquinas continuas estilo Apple ("squircle"): la curva entra en la recta poco a poco en lugar de
+ * cortar de golpe como un redondeo normal. Es la misma geometría que el "corner smoothing" de Figma
+ * (algoritmo de github.com/phamfoo/figma-squircle, MIT), con suavizado 0.6 como iOS.
+ * Rellena un Path reutilizable: no crea objetos al dibujar.
+ */
+object Squircle {
+    /** 0 = redondeo normal · 0.6 ≈ iOS · 1 = máximo */
+    var smoothing = 0.6f
+
+    fun path(out: Path, l: Float, t: Float, r: Float, b: Float, radius: Float, sm: Float = smoothing) {
+        out.reset()
+        val w = r - l
+        val h = b - t
+        if (w <= 0f || h <= 0f) return
+        val budget = minOf(w, h) / 2f
+        val rr = minOf(radius, budget)
+        if (rr < 0.5f) {
+            out.addRect(l, t, r, b, Path.Direction.CW)
+            return
+        }
+        var s = sm
+        var p = (1f + s) * rr
+        s = minOf(s, maxOf(0f, budget / rr - 1f))
+        p = minOf(p, budget)
+        val arc = 90f * (1f - s)
+        val arcLen = (Math.sin(Math.toRadians(arc / 2.0)) * rr * Math.sqrt(2.0)).toFloat()
+        val alpha = (90f - arc) / 2f
+        val p3p4 = (rr * Math.tan(Math.toRadians(alpha / 2.0))).toFloat()
+        val beta = 45.0 * s
+        val c = (p3p4 * Math.cos(Math.toRadians(beta))).toFloat()
+        val d = (c * Math.tan(Math.toRadians(beta))).toFloat()
+        val bb = (p - arcLen - c - d) / 3f
+        val a = 2f * bb
+        val d2 = rr * 2f
+        val withArc = arc > 0.05f
+        // arriba, de izquierda a derecha
+        out.moveTo(l + p, t)
+        out.lineTo(r - p, t)
+        // esquina superior derecha
+        out.cubicTo(r - p + a, t, r - p + a + bb, t, r - p + a + bb + c, t + d)
+        if (withArc) out.arcTo(r - d2, t, r, t + d2, -45f - arc / 2f, arc, false)
+        out.cubicTo(r, t + p - a - bb, r, t + p - a, r, t + p)
+        out.lineTo(r, b - p)
+        // esquina inferior derecha
+        out.cubicTo(r, b - p + a, r, b - p + a + bb, r - d, b - p + a + bb + c)
+        if (withArc) out.arcTo(r - d2, b - d2, r, b, 45f - arc / 2f, arc, false)
+        out.cubicTo(r - p + a + bb, b, r - p + a, b, r - p, b)
+        out.lineTo(l + p, b)
+        // esquina inferior izquierda
+        out.cubicTo(l + p - a, b, l + p - a - bb, b, l + p - a - bb - c, b - d)
+        if (withArc) out.arcTo(l, b - d2, l + d2, b, 135f - arc / 2f, arc, false)
+        out.cubicTo(l, b - p + a + bb, l, b - p + a, l, b - p)
+        out.lineTo(l, t + p)
+        // esquina superior izquierda
+        out.cubicTo(l, t + p - a, l, t + p - a - bb, l + d, t + p - a - bb - c)
+        if (withArc) out.arcTo(l, t, l + d2, t + d2, 225f - arc / 2f, arc, false)
+        out.cubicTo(l + p - a - bb, t, l + p - a, t, l + p, t)
+        out.close()
+    }
+
+    fun path(out: Path, r: RectF, radius: Float) = path(out, r.left, r.top, r.right, r.bottom, radius)
 }
 
 /** Rotación 3D alrededor del eje Y con perspectiva suave. */
@@ -56,6 +121,14 @@ class Glass {
     private val sh = Paint(Paint.ANTI_ALIAS_FLAG)
     private val m = Matrix()
     private val tmp = RectF()
+    // formas con esquinas continuas (se rellenan en cada dibujo, sin crear objetos)
+    private val pBody = Path()
+    private val pShadow = Path()
+    private val pLens = Path()
+    private val pRim = Path()
+    private val pInner = Path()
+    /** filo exterior muy fino y oscuro: separa el cristal de fondos claros, como en iOS */
+    private val hair = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
 
     private val fillShader = LinearGradient(
         0f, 0f, 0f, 1f,
@@ -149,11 +222,13 @@ class Glass {
             val g1 = dp(6f)
             if (shadowQ == 2) {
                 sh.color = Color.argb((26f * al * shS).toInt().coerceIn(0, 255), 0, 0, 0)
-                c.drawRoundRect(r.left - g1 * 0.5f, r.top + g1 * 0.6f * shY, r.right + g1 * 0.5f, r.bottom + g1 * 1.6f * shY, rr + g1, rr + g1, sh)
+                Squircle.path(pShadow, r.left - g1 * 0.5f, r.top + g1 * 0.6f * shY, r.right + g1 * 0.5f, r.bottom + g1 * 1.6f * shY, rr + g1)
+                c.drawPath(pShadow, sh)
             }
             sh.color = Color.argb((22f * al * shS).toInt().coerceIn(0, 255), 0, 0, 0)
             val g2 = dp(2f)
-            c.drawRoundRect(r.left, r.top + g2 * shY, r.right, r.bottom + g2 * 1.5f * shY, rr + g2, rr + g2, sh)
+            Squircle.path(pShadow, r.left, r.top + g2 * shY, r.right, r.bottom + g2 * 1.5f * shY, rr + g2)
+            c.drawPath(pShadow, sh)
         }
 
         // cuerpo teñido (color sólido o degradado)
@@ -173,7 +248,8 @@ class Glass {
             base.shader = null
             base.color = (tint and 0x00FFFFFF) or (baseA shl 24)
         }
-        c.drawRoundRect(r, rr, rr, base)
+        Squircle.path(pBody, r, rr)
+        c.drawPath(pBody, base)
 
         val fa = minOf(1f, al * minOf(1.35f, k))
         m.setScale(1f, r.height())
@@ -181,7 +257,7 @@ class Glass {
         fillShader.setLocalMatrix(m)
         fill.shader = fillShader
         fill.alpha = (255f * fa).toInt()
-        c.drawRoundRect(r, rr, rr, fill)
+        c.drawPath(pBody, fill)
 
         // lente superior
         if (lensM > 0.01f) {
@@ -193,7 +269,8 @@ class Glass {
             lens.shader = lensShader
             lens.alpha = (255f * fa * lensM).toInt().coerceIn(0, 255)
             val lr = maxOf(0f, rr - inset)
-            c.drawRoundRect(tmp, lr, lr, lens)
+            Squircle.path(pLens, tmp, lr)
+            c.drawPath(pLens, lens)
         }
 
         // cáustica inferior
@@ -203,11 +280,11 @@ class Glass {
             causticShader.setLocalMatrix(m)
             caustic.shader = causticShader
             caustic.alpha = (255f * fa * causM).toInt().coerceIn(0, 255)
-            c.drawRoundRect(r, rr, rr, caustic)
+            c.drawPath(pBody, caustic)
         }
 
         // borde especular
-        val sw = dp(1.1f) * rimW
+        val sw = dp(0.9f) * rimW
         if (sw > 0.05f) {
             rim.strokeWidth = sw
             m.setScale(r.width(), r.height())
@@ -217,7 +294,8 @@ class Glass {
             rim.colorFilter = if (rimColor != 0) filter(rimColor) else null
             rim.alpha = (255f * minOf(1f, al * minOf(1.2f, k) * rimB)).toInt().coerceIn(0, 255)
             val hw = sw / 2f
-            c.drawRoundRect(r.left + hw, r.top + hw, r.right - hw, r.bottom - hw, maxOf(0f, rr - hw), maxOf(0f, rr - hw), rim)
+            Squircle.path(pRim, r.left + hw, r.top + hw, r.right - hw, r.bottom - hw, maxOf(0f, rr - hw))
+            c.drawPath(pRim, rim)
         }
         // borde interior oscuro
         if (innerM > 0.01f) {
@@ -225,8 +303,13 @@ class Glass {
             inner.strokeWidth = iw
             inner.color = Color.argb((34f * al * innerM).toInt().coerceIn(0, 255), 0, 0, 0)
             val i2 = iw * 1.5f + (sw - dp(1.1f)).coerceAtLeast(0f)
-            c.drawRoundRect(r.left + i2, r.top + i2, r.right - i2, r.bottom - i2, maxOf(0f, rr - i2), maxOf(0f, rr - i2), inner)
+            Squircle.path(pInner, r.left + i2, r.top + i2, r.right - i2, r.bottom - i2, maxOf(0f, rr - i2))
+            c.drawPath(pInner, inner)
         }
+        // filo exterior de un pelo (0,6 dp) que da definición al borde, como los recuadros de Apple
+        hair.strokeWidth = dp(0.6f)
+        hair.color = Color.argb((30f * al).toInt().coerceIn(0, 255), 0, 0, 0)
+        c.drawPath(pBody, hair)
     }
 }
 

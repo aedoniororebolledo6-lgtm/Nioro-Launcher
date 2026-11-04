@@ -51,7 +51,7 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
         val b = downBall
         if (!moved && b != null) {
             longFired = true
-            unpress()
+            lift()
             dragBall = null
             Hx.fire(this, S.HE_LONG)
             val r = RectF()
@@ -224,18 +224,21 @@ class GravityView(ctx: Context) : AppsView(ctx), SensorEventListener {
 
     override fun onDraw(c: Canvas) {
         val a = clamp01(progress * 1.6f)
-        for (b in balls) {
+        for (bi in balls.indices) {
+            val b = balls[bi]
             val p = b.body.position
             val cx = p.x * ppm
             val cy = p.y * ppm
             if (cy < -b.r * ppm * 2f) continue
-            val size = b.r * ppm * 2f
+            val q = clamp01(progress * 1.8f - bi * 0.012f)
+            val tq = q - 1f
+            val size = b.r * ppm * 2f * (1f + 2.7f * tq * tq * tq + 1.7f * tq * tq)
             c.save()
             c.rotate(Math.toDegrees(b.body.angle.toDouble()).toFloat(), cx, cy)
             drawIcon(c, b.e, cx, cy, size, a)
             c.restore()
             // borde y reflejo fijos (no giran con la esfera): parecen bolas de cristal
-            val r = b.r * ppm
+            val r = size / 2f
             rim.strokeWidth = dp(1.2f)
             rim.alpha = (70 * a).toInt()
             c.drawCircle(cx, cy, r * 0.97f, rim)

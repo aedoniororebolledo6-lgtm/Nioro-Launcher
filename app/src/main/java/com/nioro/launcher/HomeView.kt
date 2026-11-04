@@ -56,6 +56,8 @@ class HomeView(ctx: Context) : View(ctx) {
         val bx = SpringValue(0f, 160f, 6f, 0.002f)
         /** crecimiento al aparecer en el dock (0 -> 1 con rebote) */
         val gw = SpringValue(1f, 260f, 14f, 0.002f)
+        /** puntito de "app abierta": aparece y se va con un pequeño rebote */
+        val run = SpringValue(0f, 380f, 22f, 0.002f)
         var rest = 0f
         var cx = 0f
         var scale = 1f
@@ -120,8 +122,45 @@ class HomeView(ctx: Context) : View(ctx) {
     private val tabFade = SpringValue(1f, 320f, 30f, 0.002f)
     /** tirar del menú hacia abajo para cerrarlo */
     private val sheetPull = SpringValue(0f, 360f, 30f, 0.3f)
+    /** los puntos de página aparecen/desaparecen suaves cuando cambia el número de pantallas */
+    private val dotsVis = SpringValue(0f, 300f, 30f, 0.002f)
+    private var lastDotsN = 2
     private val extraSprings = arrayOf(dragLift, dragTilt, dropX, dropY, clockSp, dotsBoost, clockEd, clockPop, clockSqu, ckX, ckY, ckS, chipPulse,
-        tabSp, tabFade, sheetPull)
+        tabSp, tabFade, sheetPull, dotsVis)
+
+    // ---- cada icono del inicio tiene su posición y escala con resorte: así se desliza a su sitio
+    // nuevo al reordenar, vuela desde el dedo al soltarlo, crece al llegar y se encoge al irse
+    private class IconPos(val key: String) {
+        val x = SpringValue(0f, 300f, 26f, 0.3f)
+        val y = SpringValue(0f, 300f, 26f, 0.3f)
+        val s = SpringValue(1f, 380f, 22f, 0.002f)
+        var page = 0
+        /** icono que se fue: se encoge en su sitio y desaparece */
+        var ghost = false
+        var e: AppEntry? = null
+    }
+    private val iconPos = HashMap<String, IconPos>()
+    private val iconList = ArrayList<IconPos>()
+    private val popKeys = HashSet<String>()
+    private var homeReady = false
+    private val iconStepper = object : Stepper {
+        override fun step(dt: Float): Boolean {
+            var any = false
+            var i = 0
+            while (i < iconList.size) {
+                val p = iconList[i]
+                if (p.x.step(dt)) any = true
+                if (p.y.step(dt)) any = true
+                if (p.s.step(dt)) any = true
+                if (p.ghost && !p.s.active) {
+                    iconList.removeAt(i)
+                    continue
+                }
+                i++
+            }
+            return any
+        }
+    }
     /** carrusel de los 20 diseños (inercia y rebote en los bordes) */
     private val designScroll = Scroll1D(ticker)
     var isClockEditing = false
@@ -301,7 +340,9 @@ class HomeView(ctx: Context) : View(ctx) {
             if (e != null) {
                 touchMode = M_MENU
                 scrubbing = false
-                unpress()
+                // se levanta un poco (como iOS) mientras se abre su menú
+                Mo.tune(pressSp, S.MO_PRESS, 500f, 0.5f)
+                pressSp.to(1.08f)
                 Hx.fire(this, S.HE_LONG)
                 val r = RectF()
                 if (inDock) {
@@ -362,6 +403,7 @@ class HomeView(ctx: Context) : View(ctx) {
         ticker.add(pressSp)
         ticker.add(editSp)
         for (x in extraSprings) ticker.add(x)
+        ticker.add(iconStepper)
         ckX.snap(S.f(S.CK_DX))
         ckY.snap(S.f(S.CK_DY))
         ckS.snap(S.p(S.CK_SCALE))
@@ -408,15 +450,18 @@ class HomeView(ctx: Context) : View(ctx) {
         for (s in slots) {
             val k = s.key
             s.running = k != null && AppRepo.get(k)?.pkg in set
+            setRunDot(s)
         }
         invalidate()
     }
 
     /** Vuelve a leer inicio y dock desde los ajustes guardados. */
     fun reload() {
+        val old = homeKeys
         homeKeys = ArrayList()
         // los huecos se conservan; una app aún sin cargar también (no se dibuja hasta que exista)
         for (k in Prefs.homeKeys()) if (k == HomeSlots.BLANK || k !in homeKeys) homeKeys.add(k)
+        diffHome(old, homeKeys)
         dockKeys = ArrayList()
         for (k in Prefs.dockKeys()) if (AppRepo.get(k) != null && k !in dockKeys) dockKeys.add(k)
         relayout()
@@ -518,7 +563,10 @@ class HomeView(ctx: Context) : View(ctx) {
         val from = pg * c
         val to = min(homeKeys.size, from + c)
         var apps = 0
-        for (i in from until to) if (homeKeys[i] != HomeSlots.BLANK) apps++
+        for (i in from until to) if (homeKeys[i] != HomeSlots.BLANK) {
+            apps++
+            makeGhost(homeKeys[i])
+        }
         for (i in to - 1 downTo from) homeKeys.removeAt(i)
         saveHome()
         val last = (realPages() - 1).toFloat()
@@ -655,6 +703,7 @@ class HomeView(ctx: Context) : View(ctx) {
         ticker.springs.add(dockShrink)
         for (x in extraSprings) ticker.springs.add(x)
         ticker.springs.add(designScroll)
+        ticker.springs.add(iconStepper)
         pressSlot = null
         tickSlot = null
         var grew = false
@@ -667,6 +716,7 @@ class HomeView(ctx: Context) : View(ctx) {
                 copySpring(prev.bs, s.bs)
                 copySpring(prev.br, s.br)
                 copySpring(prev.bx, s.bx)
+                copySpring(prev.run, s.run)
             } else {
                 // icono nuevo (p. ej. las apps terminan de cargar al arrancar): crece desde pequeño con rebote
                 Mo.tune(s.gw, S.MO_DOCK_MAG, 240f, 0.42f)
@@ -675,6 +725,7 @@ class HomeView(ctx: Context) : View(ctx) {
                 grew = true
             }
             ticker.springs.add(s.gw)
+            ticker.springs.add(s.run)
             ticker.springs.add(s.sc)
             ticker.springs.add(s.by)
             ticker.springs.add(s.bs)
@@ -716,6 +767,16 @@ class HomeView(ctx: Context) : View(ctx) {
         for (s in slots) {
             val k = s.key
             s.running = k != null && AppRepo.get(k)?.pkg in running
+            setRunDot(s)
+        }
+    }
+
+    private fun setRunDot(s: Slot) {
+        val t = if (s.running) 1f else 0f
+        if (s.run.target != t) {
+            Mo.tune(s.run, S.MO_PRESS, 380f, 0.5f)
+            s.run.to(t)
+            ticker.kick()
         }
     }
 
@@ -907,7 +968,8 @@ class HomeView(ctx: Context) : View(ctx) {
         if (scrubbing) updateDockTargets()
         // la inclinación del icono arrastrado vuelve sola a 0 cuando el dedo se para
         if (touchMode == M_DRAG && abs(dragTilt.target) > 0.05f) dragTilt.to(dragTilt.target * 0.82f)
-        if (!pressSp.active && pressSp.target >= 1f) {
+        // (con target 1.08 el icono está "levantado" por una pulsación larga: no se suelta aún)
+        if (!pressSp.active && pressSp.target == 1f) {
             pressKey = null
             pressSlot = null
         }
@@ -2096,12 +2158,72 @@ class HomeView(ctx: Context) : View(ctx) {
         return s
     }
 
+    /** posición animada de un icono del inicio; [tx],[ty] = centro de su celda */
+    private fun posFor(key: String, e: AppEntry, tx: Float, ty: Float, pg: Int): IconPos {
+        var p = iconPos[key]
+        if (p == null) {
+            p = IconPos(key)
+            iconPos[key] = p
+            iconList.add(p)
+            p.x.snap(tx)
+            p.y.snap(ty)
+            p.page = pg
+            if (popKeys.remove(key)) {
+                // recién añadido: aparece inflándose
+                Mo.tune(p.s, S.MO_EDIT_IN, 380f, 0.45f)
+                p.s.snap(0f)
+                p.s.to(1f)
+                ticker.kick()
+            }
+        } else if (p.page != pg) {
+            // cambió de pantalla: aparece en su sitio nuevo con un pequeño "pop"
+            p.page = pg
+            p.x.snap(tx)
+            p.y.snap(ty)
+            Mo.tune(p.s, S.MO_EDIT_IN, 380f, 0.5f)
+            p.s.snap(0.6f)
+            p.s.to(1f)
+            ticker.kick()
+        } else if (p.x.target != tx || p.y.target != ty) {
+            // la celda cambió (reordenar, columnas, quitar otro icono): se desliza hasta ella
+            Mo.tune(p.x, S.MO_EDIT_IN, 300f, 0.78f)
+            Mo.tune(p.y, S.MO_EDIT_IN, 300f, 0.78f)
+            p.x.to(tx)
+            p.y.to(ty)
+            ticker.kick()
+        }
+        p.e = e
+        return p
+    }
+
+    /** un icono que se quita se queda encogiéndose donde estaba */
+    private fun makeGhost(key: String) {
+        val p = iconPos.remove(key) ?: return
+        p.ghost = true
+        Mo.tune(p.s, S.MO_EDIT_OUT, 420f, 1f)
+        p.s.to(0f)
+        ticker.kick()
+    }
+
+    /** compara el inicio de antes y el de ahora: los que se van se encogen, los nuevos se inflan */
+    private fun diffHome(old: List<String>, now: List<String>) {
+        if (!homeReady) {
+            if (AppRepo.apps.isNotEmpty()) homeReady = true
+            return
+        }
+        val oldSet = HashSet(old)
+        val newSet = HashSet(now)
+        for (k in oldSet) if (k != HomeSlots.BLANK && k !in newSet) makeGhost(k)
+        for (k in newSet) if (k != HomeSlots.BLANK && k !in oldSet) popKeys.add(k)
+    }
+
     private fun drawIconAt(c: Canvas, e: AppEntry, cx: Float, cy: Float, size: Float, a: Float, label: Boolean) {
         val b = e.icon ?: return
         val al = (255f * a).toInt().coerceIn(0, 255)
         if (al == 0) return
-        val sz = size * pressScaleFor(e.key) * IconFx.scale(S.IA_HOME)
-        IconFx.draw(c, b, e.tint, cx, cy, sz, a, S.IA_HOME)
+        val ps = pressScaleFor(e.key)
+        val sz = size * ps * IconFx.scale(S.IA_HOME)
+        IconFx.draw(c, b, e.tint, cx, cy, sz, a, S.IA_HOME, 0f, clamp01((1f - ps) / 0.14f))
         if (label && Prefs.labels) {
             textPaint.alpha = Tx.alpha(S.TX_LABEL_HOME, a)
             c.drawText(labelOf(e), cx, cy + size / 2f + dp(Prefs.labelSize + S.f(S.H_LABEL_GAP)) + Tx.dy(S.TX_LABEL_HOME), textPaint)
@@ -2158,10 +2280,12 @@ class HomeView(ctx: Context) : View(ctx) {
                 val local = idx - start
                 val col = local % cols
                 val row = local / cols
-                var cx = gridLeft + col * cellW + cellW / 2f
-                var cy = iconCenterY(row)
-                var sc = 1f
-                var al = pageAlpha
+                // sitio de la celda; el icono llega a él con un resorte
+                val ip = posFor(key, e, gridLeft + col * cellW + cellW / 2f, iconCenterY(row), pg)
+                var cx = ip.x.value
+                var cy = ip.y.value
+                var sc = ip.s.value
+                var al = pageAlpha * clamp01(ip.s.value * 1.6f)
                 if (mode == 2) {
                     val colFrac = if (cols > 1) col / (cols - 1f) else 0.5f
                     Motion.pageT(2, o, w, colFrac, pt)
@@ -2172,20 +2296,29 @@ class HomeView(ctx: Context) : View(ctx) {
                     Motion.enterItem(styleEnter, enterSp.value, idx - start, min(cap, end - start), itx)
                     cx += itx.dx
                     cy += itx.dy
-                    sc = itx.sc
+                    sc *= itx.sc
                     al *= itx.alpha
                 }
                 drawIconAt(c, e, cx, cy, iconPx * sc, al, true)
                 if (ed > 0.01f) {
-                    // botón "−" para quitar el icono del inicio
-                    val ba = clamp01(ed * 1.4f - 0.3f) * al
+                    // botón "−" para quitar el icono: aparecen en cascada, inflándose
+                    val bq = pop(clamp01((ed - 0.1f - local * 0.02f) / 0.5f))
+                    val ba = clamp01(bq * 1.5f) * al
                     val bx = cx - iconPx * sc / 2f + dp(3f)
                     val by = cy - iconPx * sc / 2f + dp(3f)
                     badgePaint.color = Color.WHITE
                     badgePaint.alpha = (235 * ba).toInt().coerceIn(0, 255)
-                    c.drawCircle(bx, by, dp(11f) * lerp(0.5f, 1f, clamp01(ed)), badgePaint)
-                    Glyphs.draw(c, Glyphs.MINUS, bx, by, dp(16f), 0xFF1B2440.toInt(), ba)
+                    c.drawCircle(bx, by, dp(11f) * bq, badgePaint)
+                    Glyphs.draw(c, Glyphs.MINUS, bx, by, dp(16f) * bq, 0xFF1B2440.toInt(), ba)
                 }
+            }
+            // iconos que se fueron: se encogen en su sitio
+            for (gi in iconList.indices) {
+                val gp = iconList[gi]
+                if (!gp.ghost || gp.page != pg) continue
+                val ge = gp.e ?: continue
+                val gs = gp.s.value
+                if (gs > 0.01f) drawIconAt(c, ge, gp.x.value, gp.y.value, iconPx * gs, pageAlpha * clamp01(gs * 1.5f), false)
             }
             c.restore()
         }
@@ -2218,8 +2351,17 @@ class HomeView(ctx: Context) : View(ctx) {
 
     private fun drawDots(c: Canvas) {
         if (!S.b(S.D_SHOW)) return
-        val n = pageCount()
-        if (n <= 1) return
+        val nNow = pageCount()
+        val want = if (nNow > 1) 1f else 0f
+        if (dotsVis.target != want) {
+            Mo.tune(dotsVis, S.MO_PAGE, 260f, 0.9f)
+            dotsVis.to(want)
+            ticker.kick()
+        }
+        if (nNow > 1) lastDotsN = nNow
+        val vis = clamp01(dotsVis.value)
+        if (vis < 0.01f) return
+        val n = if (nNow > 1) nNow else lastDotsN
         val pv = pageSp.value
         val k = S.p(S.D_SIZE)
         val gap = dp(15f) * S.p(S.D_GAP) * max(1f, k)
@@ -2231,12 +2373,13 @@ class HomeView(ctx: Context) : View(ctx) {
         val idle = lerp(S.p(S.D_IDLE), 0.75f, dotsBoost.value)
         if (style == 4) {
             tmpRect.set(x0 - dp(14f) * k, y - dp(11f) * k, x0 + (n - 1) * gap + dp(14f) * k, y + dp(11f) * k)
-            glass.draw(c, tmpRect, dp(11f) * k, 0.7f, false, S.SF_DOTS)
+            glass.draw(c, tmpRect, dp(11f) * k, 0.7f * vis, false, S.SF_DOTS)
         }
         if (style == 3) {
             hintPaint.textSize = dp(13f) * k
             hintPaint.textAlign = Paint.Align.CENTER
             hintPaint.color = act
+            hintPaint.alpha = (Color.alpha(act) * vis).toInt()
             c.drawText((pv.roundToInt().coerceIn(0, n - 1) + 1).toString() + " / " + n, width / 2f, y + dp(4.5f) * k, hintPaint)
             hintPaint.color = Color.WHITE
             return
@@ -2250,6 +2393,7 @@ class HomeView(ctx: Context) : View(ctx) {
                 continue
             }
             dotPaint.color = col
+            dotPaint.alpha = (Color.alpha(col) * vis).toInt()
             when (style) {
                 1 -> {
                     val lw = dp(9f) * k
@@ -2338,11 +2482,13 @@ class HomeView(ctx: Context) : View(ctx) {
             val cx = s.cx + s.bx.value * dockIconPx * 0.5f
             val cy = baseBottom - size / 2f - lift - bounceUp
             val tint = if (s.kind == 0) AppRepo.get(s.key ?: "")?.tint ?: 0xFF3A5BA0.toInt() else 0xFF3A5BA0.toInt()
-            IconFx.draw(c, bmp, tint, cx, cy, size, a, S.IA_DOCK, s.br.value * 360f)
-            if (s.running && S.b(S.K_DOTS)) {
+            val dk = if (s === pressSlot) clamp01((1f - pressSp.value) / 0.14f) else 0f
+            IconFx.draw(c, bmp, tint, cx, cy, size, a, S.IA_DOCK, s.br.value * 360f, dk)
+            val rv = s.run.value
+            if (rv > 0.01f && S.b(S.K_DOTS)) {
                 dotPaint.color = S.col(S.K_DOT_COLOR, Color.WHITE)
-                dotPaint.alpha = (220 * a).toInt().coerceIn(0, 255)
-                c.drawCircle(s.cx, capRect.bottom - dp(5f), dp(2f) * S.p(S.K_DOT_SIZE), dotPaint)
+                dotPaint.alpha = (220 * a * clamp01(rv)).toInt().coerceIn(0, 255)
+                c.drawCircle(s.cx, capRect.bottom - dp(5f), dp(2f) * S.p(S.K_DOT_SIZE) * rv, dotPaint)
             }
         }
     }
@@ -2513,6 +2659,7 @@ class HomeView(ctx: Context) : View(ctx) {
             val bx = ix - iconPx / 2f + dp(3f)
             val by = iy - iconPx / 2f + dp(3f)
             if (hypot(cx - bx, cy - by) < dp(22f)) {
+                makeGhost(k)
                 homeKeys[idx] = HomeSlots.BLANK
                 saveHome()
                 Hx.fire(this, S.HE_SETTING)
@@ -2700,8 +2847,14 @@ class HomeView(ctx: Context) : View(ctx) {
         if (inDock) {
             val s = slotAt(x) ?: return
             when (s.kind) {
-                1 -> host?.openDrawer()
-                2 -> host?.openRecents()
+                1 -> {
+                    bounce(slots.indexOf(s))
+                    host?.openDrawer()
+                }
+                2 -> {
+                    bounce(slots.indexOf(s))
+                    host?.openRecents()
+                }
                 0 -> {
                     val e = AppRepo.get(s.key ?: return) ?: return
                     val i = slots.indexOf(s)
@@ -2733,10 +2886,12 @@ class HomeView(ctx: Context) : View(ctx) {
     /** toque en un hueco: reloj, fecha, doble toque o triple toque */
     private fun emptyTap(x: Float, y: Float) {
         if (S.b(S.CK_TAP) && clockRect.contains(x, y)) {
+            boing(2.2f)
             host?.special(0)
             return
         }
         if (S.b(S.DT_TAP) && dateRect.contains(x, y)) {
+            boing(2.2f)
             host?.special(1)
             return
         }
@@ -2795,17 +2950,40 @@ class HomeView(ctx: Context) : View(ctx) {
         invalidate()
     }
 
+    /** pone el icono [key] donde está el dedo (para que vuele desde ahí a su celda o se encoja ahí) */
+    private fun iconFromFinger(key: String, e: AppEntry?) {
+        var p = iconPos[key]
+        if (p == null) {
+            p = IconPos(key)
+            iconPos[key] = p
+            iconList.add(p)
+        }
+        p.page = pageSp.value.roundToInt()
+        p.e = e
+        p.x.snap(dragX)
+        p.y.snap(dragY - dp(14f) * dragLift.value)
+        p.s.snap(lerp(1f, 1.22f, dragLift.value))
+        Mo.tune(p.s, S.MO_PRESS, 420f, 0.55f)
+        p.s.to(1f)
+        ticker.kick()
+    }
+
     private fun finishDrag(x: Float, y: Float) {
         val key = dragKey ?: return
+        val de = AppRepo.get(key)
         if (!dragFromDock) {
             if (y < insetTop + dp(80f) && S.b(S.H_REMOVE_DRAG)) {
+                iconFromFinger(key, de)
+                makeGhost(key)
                 HomeSlots.remove(homeKeys, key)
             } else if (S.b(S.K_SHOW) && y > dockTopY() - dp(4f)) {
                 if (key !in dockKeys && dockKeys.size < S.i(S.K_MAX)) {
                     dockKeys.add(key)
                     HomeSlots.remove(homeKeys, key)
-                }
+                    iconPos.remove(key)?.let { iconList.remove(it) }
+                } else iconFromFinger(key, de)
             } else {
+                iconFromFinger(key, de)
                 val to = dropIndex(x, y)
                 val from = homeKeys.indexOf(key)
                 if (from >= 0 && to >= 0 && to != from) {
@@ -2825,7 +3003,10 @@ class HomeView(ctx: Context) : View(ctx) {
             if (y < dockTopY() - dp(70f)) {
                 dockKeys.remove(key)
                 // al sacarla del dock vuelve al inicio (no se pierde)
-                if (key !in homeKeys) HomeSlots.add(homeKeys, key)
+                if (key !in homeKeys) {
+                    HomeSlots.add(homeKeys, key)
+                    iconFromFinger(key, de)
+                }
             } else {
                 val from = dockKeys.indexOf(key)
                 var best = from

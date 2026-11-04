@@ -74,3 +74,12 @@ ideas se trasladan a `Canvas` a mano (no se añaden como dependencias).
 | [oil-oil/oil-ui](https://github.com/oil-oil/oil-ui) | 2.7k | *Skill* para explorar y comparar varias direcciones de diseño antes de elegir. |
 | [superdesigndev/superdesign-skill](https://github.com/superdesigndev/superdesign-skill) | 0.9k | *Skill* para evitar interfaces genéricas ("AI-slop"). |
 | [Yang-Ya-Chao/android-design-system-skills](https://github.com/Yang-Ya-Chao/android-design-system-skills) | 16 | *Skills* de sistema de diseño Android: neumorfismo y glassmorphism. |
+
+## 9. Bordes y movimiento estilo Apple (usados en el launcher)
+| Repo | ★ | Para qué sirve |
+|---|---|---|
+| [phamfoo/figma-squircle](https://github.com/phamfoo/figma-squircle) | 0.3k | Geometría de las esquinas continuas ("corner smoothing" de Figma, como iOS). **Se usa en `Glass.kt` (`Squircle`)**. |
+| [MartinRGB/Figma_Squircles_Approximation](https://github.com/MartinRGB/Figma_Squircles_Approximation) | — | El código original de esa aproximación. |
+| [lapfelix/UIView-SmoothCorners](https://github.com/lapfelix/UIView-SmoothCorners) | 89 | Cómo activa iOS las esquinas continuas en sus vistas. |
+| [racra/smooth-corner-rect-android-compose](https://github.com/racra/smooth-corner-rect-android-compose) | 74 | Squircles matemáticamente exactos en Android. |
+| [stoyan-vuchev/squircle-shape](https://github.com/stoyan-vuchev/squircle-shape) | 98 | Otra implementación de squircle para Android. |

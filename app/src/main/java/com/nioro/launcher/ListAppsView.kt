@@ -45,6 +45,8 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
     private var downY = 0f
     private var moved = false
     private var downRow = -1
+    private var hiRow = -1
+    private val hiSp = ticker.add(SpringValue(0f, 600f, 45f, 0.003f))
     private var longFired = false
     private var wasMoving = false
     private var atTop = false
@@ -55,7 +57,7 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
     private val longRun = Runnable {
         if (!moved && downRow in rows.indices && rows[downRow].entry != null) {
             longFired = true
-            unpress()
+            lift()
             Hx.fire(this, S.HE_LONG)
             val r = RectF()
             val ry = panel.top + dp(8f) + rows[downRow].y - scroll.value
@@ -164,8 +166,9 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
                 if (!S.b(S.LIST_LETTERS)) letterPaint.alpha = 0
                 c.drawText(r.header.toString(), panel.left + dp(22f) + ox, y + headH - dp(8f), letterPaint)
             } else {
-                if (downRow == i && !moved && !onIndex) {
+                if (hiRow == i && hiSp.value > 0.01f) {
                     rect.set(panel.left + dp(8f), y + dp(2f), panel.right - dp(34f), y + rowH - dp(2f))
+                    hiPaint.alpha = (46 * hiSp.value * al).toInt().coerceIn(0, 255)
                     c.drawRoundRect(rect, dp(16f), dp(16f), hiPaint)
                 }
                 val cx = panel.left + dp(22f) + iconSize / 2f + ox
@@ -278,7 +281,12 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
                 downRow = rowAt(x, y)
                 uiHandler.removeCallbacks(longRun)
                 unpress()
-                if (downRow >= 0) uiHandler.postDelayed(longRun, longMs)
+                if (downRow >= 0) {
+                    uiHandler.postDelayed(longRun, longMs)
+                    hiRow = downRow
+                    hiSp.to(1f)
+                    ticker.kick()
+                }
                 if (downRow >= 0) press(rows[downRow].entry)
                 invalidate()
                 return true
@@ -292,6 +300,7 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
                 if (longFired) return true
                 if (!moved && (abs(x - downX) > slop || abs(y - downY) > slop)) {
                     moved = true
+                    hiSp.to(0f)
                     uiHandler.removeCallbacks(longRun)
                 unpress()
                 }
@@ -338,6 +347,8 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
                     }
                 }
                 downRow = -1
+                hiSp.to(0f)
+                ticker.kick()
                 invalidate()
                 vt?.recycle()
                 vt = null

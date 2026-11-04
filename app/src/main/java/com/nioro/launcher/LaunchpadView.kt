@@ -49,7 +49,7 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
     private val longRun = Runnable {
         if (mode == 0 && !moved && downIdx in shown.indices) {
             longFired = true
-            unpress()
+            lift()
             Hx.fire(this, S.HE_LONG)
             val r = RectF()
             itemRect(downIdx, r)

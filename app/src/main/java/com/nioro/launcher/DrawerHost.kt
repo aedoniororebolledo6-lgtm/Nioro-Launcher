@@ -47,6 +47,9 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
     }
     private val emptyRect = RectF()
     private val emptyGlass = Glass()
+    /** "Sin resultados" aparece y se va con un fundido (y un pequeño crecimiento) */
+    private val emptySp = SpringValue(0f, 320f, 26f, 0.003f)
+    private var emptyQuery = ""
     private var scrimShader: LinearGradient? = null
     private var insetTop = 0f
     private var insetBottom = 0f
@@ -58,6 +61,7 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
     init {
         setWillNotDraw(false)
         ticker.add(sp)
+        ticker.add(emptySp)
         visibility = GONE
         search.hint = "Buscar"
         search.setHintTextColor(0xB3FFFFFF.toInt())
@@ -107,6 +111,14 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun afterTextChanged(s: Editable?) {
                 view?.setQuery(s?.toString() ?: "")
+                val v = view
+                val want = if (v != null && v.noResults) 1f else 0f
+                if (v != null && v.noResults) emptyQuery = v.query
+                if (emptySp.target != want) {
+                    Mo.tune(emptySp, S.MO_MENU, 320f, 0.62f)
+                    emptySp.to(want)
+                    ticker.kick()
+                }
                 invalidate() // para mostrar u ocultar "Sin resultados"
             }
         })
@@ -330,20 +342,22 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
     /** "Sin resultados": se dibuja encima de la vista cuando la búsqueda no encuentra nada */
     override fun dispatchDraw(c: Canvas) {
         super.dispatchDraw(c)
-        val v = view ?: return
-        if (!v.noResults) return
-        val a = clamp01(sp.value)
+        if (view == null) return
+        val e = emptySp.value
+        if (e < 0.01f) return
+        val a = clamp01(sp.value) * clamp01(e)
         val cx = width / 2f
         val cy = height * 0.42f
-        emptyRect.set(cx - dp(34f), cy - dp(34f), cx + dp(34f), cy + dp(34f))
-        emptyGlass.draw(c, emptyRect, dp(34f), a * 0.8f, true, S.SF_SEARCH)
-        Glyphs.draw(c, Glyphs.SEARCH, cx, cy, dp(34f), Color.WHITE, a)
+        val r = dp(34f) * e
+        emptyRect.set(cx - r, cy - r, cx + r, cy + r)
+        emptyGlass.draw(c, emptyRect, r, a * 0.8f, true, S.SF_SEARCH)
+        Glyphs.draw(c, Glyphs.SEARCH, cx, cy, dp(34f) * e, Color.WHITE, a)
         emptyPaint.textSize = dp(18f)
         emptyPaint.alpha = (255 * a).toInt()
         c.drawText("Sin resultados", cx, cy + dp(66f), emptyPaint)
         emptyPaint.textSize = dp(14f)
         emptyPaint.alpha = (170 * a).toInt()
-        c.drawText("Ninguna app coincide con «" + v.query + "»", cx, cy + dp(92f), emptyPaint)
+        c.drawText("Ninguna app coincide con «" + emptyQuery + "»", cx, cy + dp(92f), emptyPaint)
     }
 
     override fun onDetachedFromWindow() {

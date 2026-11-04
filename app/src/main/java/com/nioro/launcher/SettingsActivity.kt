@@ -261,6 +261,14 @@ class SettingsActivity : Activity() {
         content.setPadding(ph, 0, ph, dp(28f).toInt())
         col.addView(content)
         body(content)
+        // las tarjetas entran escalonadas, de arriba abajo (como en los Ajustes de iOS)
+        for (k in 0 until content.childCount) {
+            val ch = content.getChildAt(k)
+            ch.alpha = 0f
+            ch.translationY = dp(22f)
+            ch.animate().alpha(1f).translationY(0f).setStartDelay(70L + k * 35L).setDuration(420)
+                .setInterpolator(ease).start()
+        }
 
         // Barra compacta
         val bar = FrameLayout(this)
@@ -1299,12 +1307,22 @@ class HeroView(ctx: Context) : View(ctx) {
 class ProgressLine(ctx: Context) : View(ctx) {
     private val track = Paint(Paint.ANTI_ALIAS_FLAG)
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
-    private var p = 0f
+    private val ticker = Ticker { invalidate(); false }
+    /** el relleno avanza con un resorte en vez de saltar de porcentaje en porcentaje */
+    private val sp = ticker.add(SpringValue(0f, 160f, 26f, 0.0005f))
+    private val p: Float get() = clamp01(sp.value)
     private val r = RectF()
 
     fun set(v: Float) {
-        p = clamp01(v)
+        val t = clamp01(v)
+        if (t <= 0f) sp.snap(0f) else sp.to(t)
+        ticker.kick()
         invalidate()
+    }
+
+    override fun onDetachedFromWindow() {
+        ticker.stop()
+        super.onDetachedFromWindow()
     }
 
     override fun onDraw(c: Canvas) {
