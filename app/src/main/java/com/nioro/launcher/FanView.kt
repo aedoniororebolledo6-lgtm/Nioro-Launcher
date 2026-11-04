@@ -41,7 +41,7 @@ class FanView(ctx: Context) : AppsView(ctx) {
     private val longRun = Runnable {
         if (!moved && downIdx in shown.indices) {
             longFired = true
-            unpress()
+            lift()
             Hx.fire(this, S.HE_LONG)
             val r = RectF()
             iconRect(downIdx, r)

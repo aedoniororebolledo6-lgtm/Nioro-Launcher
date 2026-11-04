@@ -137,7 +137,8 @@ class RecentsView(ctx: Context) : View0(ctx) {
         val cw = cardW()
         val ch = cardH()
         val cy = (insetTop + h - insetBottom) / 2f - dp(10f)
-        val o = i - pos.value
+        // tras quitar una tarjeta, las de después empiezan donde estaban y se deslizan al hueco
+        val o = i - pos.value + (if (removedAt in 0..i) gapShift.value else 0f)
         val p = progress
         outA = 1f
         outRot = 0f
@@ -457,7 +458,14 @@ class RecentsView(ctx: Context) : View0(ctx) {
         ticker.kick()
     }
 
+    private val gapShift = ticker.add(SpringValue(0f, 300f, 28f, 0.002f))
+    private var removedAt = -1
+
     private fun removeAt(idx: Int) {
+        removedAt = idx
+        Mo.tune(gapShift, S.MO_RECENTS_CAROUSEL, 300f, 0.78f)
+        gapShift.snap(1f)
+        gapShift.to(0f)
         val e = items.removeAt(idx)
         Recents.forget(e.key)
         dismissIdx = -1

@@ -288,6 +288,8 @@ class OneSlider(ctx: Context, private val min: Int, private val max: Int, start:
     var onChange: ((Int) -> Unit)? = null
     private val ticker = Ticker { invalidate(); false }
     private val grow = ticker.add(SpringValue(0f, 500f, 36f, 0.002f))
+    /** posición dibujada (0..1): sigue al valor con un resorte al tocar la pista */
+    private val shown = ticker.add(SpringValue(-1f, 420f, 34f, 0.0005f))
     private val track = Paint(Paint.ANTI_ALIAS_FLAG)
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
     private val thumb = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -306,7 +308,8 @@ class OneSlider(ctx: Context, private val min: Int, private val max: Int, start:
         rr.set(pad, height / 2f - th / 2f, width - pad, height / 2f + th / 2f)
         track.color = OneColors.TRACK
         c.drawRoundRect(rr, th / 2f, th / 2f, track)
-        val x = lerp(rr.left, rr.right, frac())
+        if (shown.value < 0f && !shown.active) shown.snap(frac())
+        val x = lerp(rr.left, rr.right, clamp01(shown.value))
         fill.color = OneColors.ACCENT
         c.drawRoundRect(rr.left, rr.top, x, rr.bottom, th / 2f, th / 2f, fill)
         thumb.color = Color.WHITE
@@ -347,6 +350,7 @@ class OneSlider(ctx: Context, private val min: Int, private val max: Int, start:
                     if (max - min <= 40) Hx.fire(this, S.HE_SETTING)
                     onChange?.invoke(v)
                 }
+                shown.snap(frac())
                 invalidate()
             }
             MotionEvent.ACTION_UP -> {
@@ -358,6 +362,9 @@ class OneSlider(ctx: Context, private val min: Int, private val max: Int, start:
                         value = v
                         onChange?.invoke(v)
                     }
+                    Mo.tune(shown, S.MO_CONTROLS, 420f, 0.75f)
+                    shown.to(frac())
+                    ticker.kick()
                     invalidate()
                 }
                 dragging = false

@@ -66,6 +66,13 @@ abstract class AppsView(ctx: Context) : View(ctx) {
         ticker.kick()
     }
 
+    /** pulsación larga: el icono se levanta un poco antes de abrir su menú (como iOS) */
+    protected fun lift() {
+        Mo.tune(pressSp, S.MO_PRESS, 500f, 0.5f)
+        pressSp.to(1.08f)
+        ticker.kick()
+    }
+
     protected fun unpress() {
         if (pressKey == null && pressSp.target >= 1f) return
         Mo.tune(pressSp, S.MO_RELEASE, 420f, IconFx.releaseRatio(iconArea))
@@ -140,10 +147,13 @@ abstract class AppsView(ctx: Context) : View(ctx) {
         val b = e.icon ?: return
         val al = (255f * a).toInt().coerceIn(0, 255)
         if (al == 0) return
-        if (pressKey != null && !pressSp.active && pressSp.target >= 1f) pressKey = null
+        if (pressKey != null && !pressSp.active && pressSp.target == 1f) pressKey = null
         val f = filterSp.value
-        val sz = (if (e.key == pressKey) size * pressSp.value else size) * IconFx.scale(iconArea) * f
-        IconFx.draw(c, b, e.tint, cx, cy, sz, a * clamp01(f * 1.6f - 0.6f), iconArea)
+        val pk = e.key == pressKey
+        val sz = (if (pk) size * pressSp.value else size) * IconFx.scale(iconArea) * f
+        // pulsado: se oscurece en proporción a lo que se hunde
+        val dark = if (pk) clamp01((1f - pressSp.value) / 0.14f) else 0f
+        IconFx.draw(c, b, e.tint, cx, cy, sz, a * clamp01(f * 1.6f - 0.6f), iconArea, 0f, dark)
     }
 
     protected fun drawLabel(c: Canvas, e: AppEntry, cx: Float, y: Float, maxW: Float, a: Float) {

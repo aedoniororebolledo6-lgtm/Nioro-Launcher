@@ -63,6 +63,10 @@ object IconFx {
     private val filterNone = BooleanArray(8)
     private val paths = HashMap<Int, Path>()
     private var pathShape = -1
+    /** forma del icono a tamaño 100 para el oscurecido al tocar (se escala con el lienzo) */
+    private var unitPath: Path? = null
+    private var unitShape = -2
+    private val darkPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.BLACK }
 
     private fun filterFor(area: Int): ColorMatrixColorFilter? {
         if (filterVer[area] == S.version) return if (filterNone[area]) null else filters[area]
@@ -117,7 +121,8 @@ object IconFx {
      * Dibuja un icono centrado en (cx, cy). El tamaño ya debe incluir la escala de la zona
      * (multiplicar por [scale]) y el hundimiento al tocar.
      */
-    fun draw(c: Canvas, b: Bitmap, tint: Int, cx: Float, cy: Float, size: Float, a: Float, area: Int, rot: Float = 0f) {
+    /** [dark] 0..1: oscurece el icono mientras se pulsa (como iOS) */
+    fun draw(c: Canvas, b: Bitmap, tint: Int, cx: Float, cy: Float, size: Float, a: Float, area: Int, rot: Float = 0f, dark: Float = 0f) {
         val al = a * S.p(S.ip(area, S.IP_OPACITY))
         if (al <= 0.004f || size < 1f) return
         val r = rot + S.f(S.ip(area, S.IP_ROT))
@@ -136,6 +141,21 @@ object IconFx {
         paint.colorFilter = filterFor(area)
         dst.set(cx - size / 2f, cy - size / 2f, cx + size / 2f, cy + size / 2f)
         c.drawBitmap(b, null, dst, paint)
+        if (dark > 0.01f) {
+            val shape = maxOf(0, AppRepo.bakedShape)
+            var up = unitPath
+            if (up == null || unitShape != shape) {
+                up = AppRepo.shapePath(if (shape == 4) 0 else shape, 100f)
+                unitPath = up
+                unitShape = shape
+            }
+            darkPaint.alpha = (72f * dark * al).toInt().coerceIn(0, 255)
+            c.save()
+            c.translate(cx - size / 2f, cy - size / 2f)
+            c.scale(size / 100f, size / 100f)
+            c.drawPath(up, darkPaint)
+            c.restore()
+        }
         if (S.b(S.ip(area, S.IP_OUTLINE))) {
             val w = dp(1.5f) * S.p(S.ip(area, S.IP_OUTLINE_W))
             outline.strokeWidth = w
