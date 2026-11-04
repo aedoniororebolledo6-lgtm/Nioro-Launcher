@@ -64,7 +64,7 @@ class FanView(ctx: Context) : AppsView(ctx) {
         step = iconSize * 1.2f * S.p(S.FAN_GAP)
         Tx.apply(labelPaint, S.TX_FAN, dp(15f), 400, 0f, 0)
         ax = if (anchorX > 0f) anchorX else w / 2f
-        ay = h - insetBottom - dp(104f) - iconSize / 2f
+        ay = h - bottomInset - (if (keyboardUp) dp(24f) else dp(104f)) - iconSize / 2f
         val usable = ay - (insetTop + dp(90f))
         visibleCount = max(3, (usable / step).toInt())
         val reach = h * 0.72f
@@ -72,6 +72,11 @@ class FanView(ctx: Context) : AppsView(ctx) {
         scroll.min = 0f
         scroll.max = max(0, shown.size - visibleCount).toFloat() * step
         scroll.dim = h * 0.5f
+    }
+
+    override fun onImeChanged() {
+        layout()
+        invalidate()
     }
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
@@ -108,7 +113,7 @@ class FanView(ctx: Context) : AppsView(ctx) {
     override fun onDraw(c: Canvas) {
         if (shown.isEmpty()) return
         val p = progress
-        val topLimit = insetTop + dp(70f)
+        val topLimit = insetTop + (if (keyboardUp) dp(16f) else dp(70f))
         // se dibuja de arriba (lejos) hacia abajo (cerca del dock)
         for (i in shown.size - 1 downTo 0) {
             val dist0 = i * step - scroll.value

@@ -95,7 +95,7 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
         Tx.apply(bubblePaint, S.TX_BUBBLE, dp(34f), 500, 0f, 0)
         headH = dp(30f)
         iconSize = dp(S.f(S.LIST_ICON))
-        panel.set(dp(14f), insetTop + dp(76f), w - dp(14f), h - insetBottom - dp(14f))
+        panel.set(dp(14f), insetTop + (if (keyboardUp) dp(16f) else dp(76f)), w - dp(14f), h - bottomInset - dp(14f))
         // los nombres terminan antes del índice A-Z
         nameW = max(dp(40f), panel.right - dp(40f) - (panel.left + dp(22f) + iconSize + dp(16f)))
         names.clear()
@@ -119,6 +119,13 @@ class ListAppsView(ctx: Context) : AppsView(ctx) {
         scroll.min = 0f
         scroll.max = max(0f, contentH - (panel.height() - dp(16f)))
         scroll.dim = panel.height()
+    }
+
+    override fun onImeChanged() {
+        val sv = scroll.value
+        layout()
+        scroll.jump(minOf(sv, scroll.max))
+        invalidate()
     }
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {

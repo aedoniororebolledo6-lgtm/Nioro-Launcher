@@ -83,7 +83,17 @@ class MainActivity : Activity() {
             drawer.setInsets(top.toFloat(), bottom.toFloat())
             recents.view.insetTop = top.toFloat()
             recents.view.insetBottom = bottom.toFloat()
+            drawer.setIme(Compat.ime(ins).toFloat())
             ins
+        }
+        // Android 11+: la vista de apps sube a la vez que el teclado, fotograma a fotograma
+        if (Build.VERSION.SDK_INT >= 30) {
+            root.setWindowInsetsAnimationCallback(object : android.view.WindowInsetsAnimation.Callback(android.view.WindowInsetsAnimation.Callback.DISPATCH_MODE_CONTINUE_ON_SUBTREE) {
+                override fun onProgress(insets: WindowInsets, running: MutableList<android.view.WindowInsetsAnimation>): WindowInsets {
+                    drawer.setIme(Compat.ime(insets).toFloat())
+                    return insets
+                }
+            })
         }
 
         home.host = homeHost

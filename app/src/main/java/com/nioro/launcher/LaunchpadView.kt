@@ -63,8 +63,8 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
         if (w <= 0f) return
         cols = Prefs.drawerCols.coerceIn(3, 6)
         iconSize = dp(Prefs.iconDp.toFloat() + 2f)
-        top = insetTop + dp(84f)
-        dotsY = h - insetBottom - dp(40f)
+        top = insetTop + (if (keyboardUp) dp(24f) else dp(84f))
+        dotsY = h - bottomInset - (if (keyboardUp) dp(22f) else dp(40f))
         val avail = dotsY - dp(20f) - top
         val minCell = iconSize + dp(36f) + dp(10f)
         rows = if (S.i(S.LP_ROWS) > 0) S.i(S.LP_ROWS) + 2 else (avail / minCell).toInt().coerceIn(3, 8)
@@ -72,6 +72,13 @@ class LaunchpadView(ctx: Context) : AppsView(ctx) {
         cellW = w / cols
         cellH = avail / rows
         iconSize = min(iconSize, cellW - dp(14f)).coerceAtLeast(dp(30f))
+    }
+
+    override fun onImeChanged() {
+        layout()
+        val last = (pageCount() - 1).toFloat()
+        if (pageSp.value > last) pageSp.snap(last)
+        invalidate()
     }
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {

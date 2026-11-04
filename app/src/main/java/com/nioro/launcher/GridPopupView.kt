@@ -88,23 +88,33 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
         val h = height.toFloat()
         if (w <= 0f) return
         cols = Prefs.drawerCols.coerceIn(3, 6)
-        val pw = w - dp(28f)
-        pad = dp(14f)
+        // un poco más pequeña: más margen a los lados, menos alta e iconos algo menores
+        val side = dp(30f)
+        val pw = w - side * 2f
+        pad = dp(12f)
         cellW = (pw - pad * 2f) / cols
-        iconSize = min(dp(Prefs.iconDp.toFloat() - 2f), cellW - dp(18f)).coerceAtLeast(dp(30f))
-        cellH = iconSize + dp(36f)
-        val bottom = h - insetBottom - dp(112f)
-        val maxH = min(h * S.p(S.GRID_H), h - insetTop - dp(160f))
+        iconSize = min(dp(Prefs.iconDp.toFloat() - 8f), cellW - dp(22f)).coerceAtLeast(dp(30f))
+        cellH = iconSize + dp(34f)
+        // con el teclado abierto el panel se apoya justo encima de él (si no, sobre el dock)
+        val bottom = if (keyboardUp) h - imeInset - dp(4f) else h - insetBottom - dp(112f)
+        val maxH = min(h * S.p(S.GRID_H) * 0.86f, bottom - insetTop - (if (keyboardUp) dp(20f) else dp(84f))).coerceAtLeast(dp(150f))
         val rowsAll = ceil(shown.size / cols.toFloat()).toInt()
         val header = if (S.b(S.GRID_TITLE)) dp(66f) else dp(14f)
         val wanted = header + rowsAll * cellH + dp(16f)
         val ph = min(maxH, max(dp(230f), wanted))
-        panel.set(dp(14f), bottom - ph, dp(14f) + pw, bottom)
+        panel.set(side, bottom - ph, side + pw, bottom)
         areaTop = panel.top + header
         areaBottom = panel.bottom - dp(10f)
         scroll.min = 0f
         scroll.max = max(0f, rowsAll * cellH + dp(12f) - (areaBottom - areaTop))
         scroll.dim = areaBottom - areaTop
+    }
+
+    override fun onImeChanged() {
+        val sv = scroll.value
+        layout()
+        scroll.jump(min(sv, scroll.max))
+        invalidate()
     }
 
     override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
@@ -163,7 +173,7 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
         c.save()
         c.scale(sx, sy, ax, pivotY)
         // pico unido al panel (redondeado), con el mismo cristal
-        if (S.b(S.GRID_NUB)) {
+        if (S.b(S.GRID_NUB) && !keyboardUp) { // con el teclado abierto el pico no apunta al dock: se oculta
             nubPath.reset()
             nubPath.moveTo(ax - dp(16f), panel.bottom - dp(2f))
             nubPath.cubicTo(ax - dp(7f), panel.bottom - dp(2f), ax - dp(4f), panel.bottom + dp(11f), ax, panel.bottom + dp(12f))
