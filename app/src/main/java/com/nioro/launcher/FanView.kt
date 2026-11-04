@@ -116,7 +116,9 @@ class FanView(ctx: Context) : AppsView(ctx) {
             val cy0 = posY(dist0)
             if (cy0 < topLimit - step) continue
             val rank = max(0f, dist0 / step)
-            val q = (p * 1.55f - min(rank, 12f) * 0.045f).coerceIn(0f, 1.25f)
+            // en reposo q = 1 exacto (antes llegaba a 1,25: los iconos cercanos se separaban de más,
+            // se salían por arriba y el toque no coincidía con el icono)
+            val q = clamp01(p * 1.55f - min(rank, 12f) * 0.045f)
             val dist = dist0 * q
             val cx = posX(dist)
             val cy = posY(dist)

@@ -156,8 +156,10 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
         val ax = (if (anchorX > 0f) anchorX else width / 2f).coerceIn(panel.left + dp(44f), panel.right - dp(44f))
         val pivotY = panel.bottom + dp(14f)
         // se abre desde el pico como una gota: primero a lo ancho y luego a lo alto
-        val sx = lerp(0.16f, 1f, min(p * 1.08f, 1.05f))
-        val sy = lerp(0.06f, 1f, min(p, 1.05f))
+        // (en reposo, p = 1, las dos escalas valen exactamente 1: antes el ancho quedaba en 1,04 y se salía)
+        val over = max(0f, p - 1f)
+        val sx = lerp(0.16f, 1f, min(p * 1.08f, 1f) + over)
+        val sy = lerp(0.06f, 1f, min(p, 1f) + over)
         c.save()
         c.scale(sx, sy, ax, pivotY)
         // pico unido al panel (redondeado), con el mismo cristal
