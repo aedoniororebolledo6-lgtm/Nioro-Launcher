@@ -9,7 +9,8 @@ El dueño habla **español**: responde siempre en español, claro y sin tecnicis
   sin publicar nada. Revisa el resultado con las herramientas `mcp__github__actions_*`
   (y `get_job_logs` si falla). Espera en segundo plano, no con `sleep` en primer plano.
 - No hay pruebas unitarias ni capturas automáticas todavía: revisa a mano la lógica que cambies.
-- Si el usuario manda capturas de sus teléfonos (Samsung S21 y Redmi Note 9 Pro con MIUI) en el chat, úsalas para comprobar.
+- Si el usuario manda capturas de sus teléfonos (Samsung S21, Redmi Note 9 Pro con MIUI y Honor X9a con MagicOS) en el chat, úsalas para comprobar.
+- Cierres: `CrashGuard.kt` guarda el último error (Ajustes → Acerca de → "Enviar el último error") y activa un modo seguro tras 2 cierres seguidos. Pide ese texto al usuario si hay problemas de estabilidad.
 - Ideas y repositorios de referencia para diseñar: `docs/referencias-diseno.md`.
 
 ## Publicar una actualización
