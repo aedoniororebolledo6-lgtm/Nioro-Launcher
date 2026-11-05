@@ -69,6 +69,21 @@ hold() { timeout 20 adb shell input swipe "$1" "$2" "$1" "$2" 1300; }
   wait $SW; sleep 2; back
   # 5) menú contextual de un icono del inicio (mantener pulsado el primero)
   prefs 0; start; hold 135 700; shot 09_menu_icono; back
+  # 8) botón Launchpad del dock: vídeo de la apertura y fluidez medida por el sistema
+  prefs 0; start
+  g_boton_lp() { timeout 20 adb shell input tap 136 2070; }
+  rec v7_boton_launchpad g_boton_lp; back
+  timeout 20 adb shell dumpsys gfxinfo $P reset > /dev/null
+  for k in 1 2 3 4 5; do timeout 20 adb shell input tap 136 2070; sleep 1.5; back; sleep 1; done
+  echo "== fluidez al abrir con el botón (5 veces)"
+  timeout 20 adb shell dumpsys gfxinfo $P | grep -E "Total frames|Janky|percentile|Slow|Missed|High input|Frame deadline" | head -20
+  # 9) prueba de estrés: miles de toques al azar en el launcher y sus ajustes, para cazar cierres
+  for st in 0 2 4; do
+    prefs $st; start
+    echo "== estrés (vista $st)"
+    timeout 300 adb shell monkey -p $P --throttle 25 --pct-syskeys 0 --pct-appswitch 0 -s $((st+7)) -v 4000 2>&1 | grep -E "CRASH|Exception|ANR|Events injected|Monkey finished|aborted" | head -20
+    timeout 20 adb shell "run-as $P cat files/ultimo_error.txt" 2>/dev/null | head -60
+  done
   echo "== errores graves"
   adb logcat -d -b crash | tail -n 80
 } > shots/report.txt 2>&1

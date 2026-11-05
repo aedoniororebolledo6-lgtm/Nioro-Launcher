@@ -523,6 +523,17 @@ class SettingsActivity : Activity() {
                 button(k, "Versión", ver, Glyphs.INFO) {}
                 divider(k, dp(60f))
                 updateRow(k)
+                val err = CrashGuard.lastError()
+                if (err != null) {
+                    divider(k, dp(60f))
+                    button(k, "Enviar el último error", "El launcher se cerró: toca para compartir el informe", Glyphs.INFO) {
+                        try {
+                            val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, err)
+                            startActivity(Intent.createChooser(send, "Enviar informe de error"))
+                        } catch (t: Throwable) {
+                        }
+                    }
+                }
                 val t = text("Hecho a medida: Kotlin nativo, sin HTML. Física de resortes exacta, cristal líquido dibujado a mano y cero animaciones en reposo.", 13f, 400, OneColors.SUB)
                 t.setPadding(dp(20f).toInt(), dp(14f).toInt(), dp(20f).toInt(), 0)
                 c.addView(t)

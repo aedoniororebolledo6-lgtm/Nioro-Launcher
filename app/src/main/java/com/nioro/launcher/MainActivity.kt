@@ -114,6 +114,11 @@ class MainActivity : Activity() {
         else registerReceiver(pkgReceiver, f)
 
         reloadApps()
+        if (CrashGuard.safeMode) {
+            Toast.makeText(this, "Nioro se recuperó de un error: modo seguro (sin desenfoque) por un momento", Toast.LENGTH_LONG).show()
+        }
+        // tras un minuto funcionando bien se olvidan los cierres anteriores
+        root.postDelayed({ CrashGuard.markStable() }, 60_000L)
         try {
             (getSystemService(Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager).registerTorchCallback(torchCb, null)
             torchReg = true
@@ -258,7 +263,7 @@ class MainActivity : Activity() {
     private fun updateBackdrop() {
         val p = maxOf(drawerP, recentsP)
         home.setDrawerProgress(p)
-        val blurOn = Prefs.blur && !Prefs.saver
+        val blurOn = Prefs.blur && !Prefs.saver && !CrashGuard.safeMode
         if (p > 0.001f) {
             if (blurOn && !backdrop.tried) backdrop.capture(home)
             backdrop.progress = p
