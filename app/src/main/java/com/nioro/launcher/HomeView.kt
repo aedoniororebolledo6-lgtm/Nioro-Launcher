@@ -73,6 +73,8 @@ class HomeView(ctx: Context) : View(ctx) {
     private val ticker = Ticker { dt -> onFrame(dt) }
     private val handler = Handler(Looper.getMainLooper())
     private val glass = Glass()
+    /** fondo del dock según su forma y diseño (el mismo pintor que las miniaturas de Ajustes) */
+    private val dockArt = DockArt()
     private val slop = ViewConfiguration.get(ctx).scaledTouchSlop.toFloat()
 
     // Estado
@@ -284,6 +286,8 @@ class HomeView(ctx: Context) : View(ctx) {
     private var cellW = 0f
     private var cellH = 0f
     private var gridTop = 0f
+    /** dónde va cada celda según el estilo de organización (Cuadrícula, Panal, Sonrisa...) */
+    private val hg = HomeLayout.Grid()
     private var dotsY = 0f
     private var dockCy = 0f
     private var dockH = 0f
@@ -635,6 +639,9 @@ class HomeView(ctx: Context) : View(ctx) {
         cellH = avail / rows
         // el icono nunca se sale de su celda aunque la cuadrícula sea muy densa
         iconPx = min(iconPx, min(cellW - dp(12f), cellH - labelH - dp(8f))).coerceAtLeast(dp(28f))
+        // estilo de organización: mismas celdas, otra colocación (las apps no cambian de sitio)
+        HomeLayout.setup(hg, S.i(S.H_LAYOUT), cols, rows, gridLeft, w - gridLeft, gridTop, avail, iconPx + labelH + dp(12f))
+        iconPx = min(iconPx, min(hg.step - dp(12f), hg.cellH - labelH - dp(8f))).coerceAtLeast(dp(28f))
         labelCache.clear()
         rebuildDock()
     }
@@ -925,8 +932,36 @@ class HomeView(ctx: Context) : View(ctx) {
         }
     }
 
-    private fun iconCenterY(row: Int): Float =
-        gridTop + row * cellH + cellH / 2f - (if (Prefs.labels) dp(Prefs.labelSize * 0.75f) else 0f) + dp(S.f(S.H_ICON_DY))
+    /** el icono sube un poco dentro de su celda para dejar sitio al nombre */
+    private fun labelLift(): Float = (if (Prefs.labels) dp(Prefs.labelSize * 0.75f) else 0f) - dp(S.f(S.H_ICON_DY))
+
+    /** centro de la celda [local] (0 until cap) según el estilo de organización */
+    private fun cellX(local: Int): Float = HomeLayout.x(hg, local % cols, local / cols)
+    private fun cellMidY(local: Int): Float = HomeLayout.y(hg, local % cols, local / cols)
+    /** centro del icono de la celda (algo más arriba que el de la celda, por el nombre) */
+    private fun cellIconY(local: Int): Float = cellMidY(local) - labelLift()
+
+    /**
+     * Celda de la pantalla bajo (x, y). Con [strict] solo si el punto cae dentro de una celda
+     * (si no, -1); sin él, la más cercana. Sirve para cualquier estilo (Panal, Sonrisa, Dividida...).
+     */
+    private fun cellAt(x: Float, y: Float, strict: Boolean): Int {
+        var best = -1
+        var bd = Float.MAX_VALUE
+        val hx = hg.step * 0.5f
+        val hy = hg.cellH * 0.5f
+        for (i in 0 until cap) {
+            val dx = x - cellX(i)
+            val dy = y - cellMidY(i)
+            if (strict && (abs(dx) > hx || abs(dy) > hy)) continue
+            val d = dx * dx + dy * dy
+            if (d < bd) {
+                bd = d
+                best = i
+            }
+        }
+        return best
+    }
 
     private fun homeIconRect(idx: Int, out: RectF) {
         if (idx < 0) {
@@ -934,10 +969,8 @@ class HomeView(ctx: Context) : View(ctx) {
             return
         }
         val local = idx % cap
-        val col = local % cols
-        val row = local / cols
-        val cx = gridLeft + col * cellW + cellW / 2f
-        val cy = iconCenterY(row)
+        val cx = cellX(local)
+        val cy = cellIconY(local)
         out.set(cx - iconPx / 2f, cy - iconPx / 2f, cx + iconPx / 2f, cy + iconPx / 2f)
     }
 
@@ -2165,7 +2198,7 @@ class HomeView(ctx: Context) : View(ctx) {
     private fun labelOf(e: AppEntry): String {
         var s = labelCache[e.key]
         if (s == null) {
-            s = TextUtils.ellipsize(Tx.str(S.TX_LABEL_HOME, e.label), textPaint, cellW - dp(8f), TextUtils.TruncateAt.END).toString()
+            s = TextUtils.ellipsize(Tx.str(S.TX_LABEL_HOME, e.label), textPaint, hg.labelW, TextUtils.TruncateAt.END).toString()
             labelCache[e.key] = s
         }
         return s
@@ -2294,7 +2327,7 @@ class HomeView(ctx: Context) : View(ctx) {
                 val col = local % cols
                 val row = local / cols
                 // sitio de la celda; el icono llega a él con un resorte
-                val ip = posFor(key, e, gridLeft + col * cellW + cellW / 2f, iconCenterY(row), pg)
+                val ip = posFor(key, e, cellX(local), cellIconY(local), pg)
                 var cx = ip.x.value
                 var cy = ip.y.value
                 var sc = ip.s.value
@@ -2342,10 +2375,8 @@ class HomeView(ctx: Context) : View(ctx) {
             if (idx >= 0 && dragY > insetTop + dp(80f) && dragY < dockTopY()) {
                 val local = idx - pg * cap
                 if (local in 0 until cap) {
-                    val col = local % cols
-                    val row = local / cols
-                    val tx = gridLeft + col * cellW + dp(6f)
-                    val ty = gridTop + row * cellH + dp(4f)
+                    val tx = cellX(local) - (hg.step - dp(12f)) / 2f
+                    val ty = cellMidY(local) - (hg.cellH - dp(8f)) / 2f
                     if (!dropShown) {
                         dropX.snap(tx)
                         dropY.snap(ty)
@@ -2355,7 +2386,7 @@ class HomeView(ctx: Context) : View(ctx) {
                         dropY.to(ty)
                         ticker.kick()
                     }
-                    tmpRect.set(dropX.value, dropY.value, dropX.value + cellW - dp(12f), dropY.value + cellH - dp(8f))
+                    tmpRect.set(dropX.value, dropY.value, dropX.value + hg.step - dp(12f), dropY.value + hg.cellH - dp(8f))
                     glass.draw(c, tmpRect, dp(20f), 0.45f, false, S.SF_DROP)
                 } else dropShown = false
             } else dropShown = false
@@ -2459,17 +2490,15 @@ class HomeView(ctx: Context) : View(ctx) {
         if (a <= 0.01f) return
         // cápsula: ancho en reposo animado (crece/encoge con rebote) o el de la magnificación si es mayor
         val capW = max(restWidth() + dockShrink.value * fit, total) + dp(S.f(S.K_EXTRA_W))
-        when (S.i(S.K_SHAPE)) {
-            1 -> {
-                capRect.set(dp(8f), dockCy - dockH / 2f + dy, w - dp(8f), dockCy + dockH / 2f + dy)
-                glass.draw(c, capRect, dockH * 0.32f, a, true, S.SF_DOCK)
-            }
-            2 -> capRect.set((w - capW) / 2f, dockCy - dockH / 2f + dy, (w + capW) / 2f, dockCy + dockH / 2f + dy)
-            else -> {
-                capRect.set((w - capW) / 2f, dockCy - dockH / 2f + dy, (w + capW) / 2f, dockCy + dockH / 2f + dy)
-                glass.draw(c, capRect, dockH * 0.44f, a, true, S.SF_DOCK)
-            }
-        }
+        // forma y material del dock (Ajustes → Dock → Diseños del dock)
+        val form = S.i(S.K_SHAPE)
+        val dm = dockArt.settingsMat()
+        dockArt.bodyRect(form, capRect, w, capW, dockCy + dy, dockH, height.toFloat() + dy)
+        if (dm != null) dockArt.drawBody(c, form, capRect, dockH, a, dm, S.b(S.K_DOUBLE))
+        val tiles = dm != null && DockDesigns.perIcon(form)
+        val reflect = S.b(S.K_REFLECT) && form != DockDesigns.F_NONE
+        // borde de abajo del dock (en la Pestaña el fondo llega hasta el final de la pantalla)
+        val dockBottom = min(capRect.bottom, dockCy + dockH / 2f + dy)
 
         val baseBottom = dockCy + dockIconPx / 2f + dy
         val lf = Motion.liftFactor(Prefs.dockMode) * S.p(S.DOCKS_BASE + Prefs.dockMode * 2 + 1)
@@ -2496,12 +2525,25 @@ class HomeView(ctx: Context) : View(ctx) {
             val cy = baseBottom - size / 2f - lift - bounceUp
             val tint = if (s.kind == 0) AppRepo.get(s.key ?: "")?.tint ?: 0xFF3A5BA0.toInt() else 0xFF3A5BA0.toInt()
             val dk = if (s === pressSlot) clamp01((1f - pressSp.value) / 0.14f) else 0f
+            // Burbujas / Baldosas: cada icono lleva su propio cristal, que crece con él
+            if (tiles && dm != null) dockArt.drawTile(c, form, cx, cy, size, a, dm)
+            if (reflect) {
+                // reflejo: el icono invertido y muy tenue bajo su base, recortado al dock
+                val foot = cy + size / 2f
+                if (foot < dockBottom - dp(2f)) {
+                    c.save()
+                    c.clipRect(capRect.left, foot, capRect.right, dockBottom)
+                    c.scale(1f, -1f, cx, foot)
+                    IconFx.draw(c, bmp, tint, cx, cy, size, a * 0.22f, S.IA_DOCK, s.br.value * 360f, 0f)
+                    c.restore()
+                }
+            }
             IconFx.draw(c, bmp, tint, cx, cy, size, a, S.IA_DOCK, s.br.value * 360f, dk)
             val rv = s.run.value
             if (rv > 0.01f && S.b(S.K_DOTS)) {
                 dotPaint.color = S.col(S.K_DOT_COLOR, Color.WHITE)
                 dotPaint.alpha = (220 * a * clamp01(rv)).toInt().coerceIn(0, 255)
-                c.drawCircle(s.cx, capRect.bottom - dp(5f), dp(2f) * S.p(S.K_DOT_SIZE) * rv, dotPaint)
+                c.drawCircle(s.cx, dockBottom - dp(5f), dp(2f) * S.p(S.K_DOT_SIZE) * rv, dotPaint)
             }
         }
     }
@@ -2531,10 +2573,9 @@ class HomeView(ctx: Context) : View(ctx) {
     // ---------------------------------------------------------------- Tacto
     private fun homeKeyAt(x: Float, y: Float): String? {
         val pg = pageSp.value.roundToInt()
-        val col = floor((x - gridLeft) / cellW).toInt()
-        val row = ((y - gridTop) / cellH).toInt()
-        if (col !in 0 until cols || row !in 0 until rows || y < gridTop) return null
-        val idx = pg * cap + row * cols + col
+        val local = cellAt(x, y, true)
+        if (local < 0) return null
+        val idx = pg * cap + local
         if (idx !in 0 until homeKeys.size) return null
         val k = homeKeys[idx]
         // un hueco (o una app que ya no existe) es fondo vacío
@@ -2549,9 +2590,7 @@ class HomeView(ctx: Context) : View(ctx) {
     /** celda bajo el dedo (puede estar más allá del final de la lista: una celda vacía) */
     private fun dropIndex(x: Float, y: Float): Int {
         val pg = pageSp.value.roundToInt().coerceIn(0, realPages() - 1)
-        val col = ((x - gridLeft) / cellW).toInt().coerceIn(0, cols - 1)
-        val row = ((y - gridTop) / cellH).toInt().coerceIn(0, rows - 1)
-        return pg * cap + row * cols + col
+        return pg * cap + cellAt(x, y, false).coerceAtLeast(0)
     }
 
     private fun cancelLong() {
@@ -2669,8 +2708,8 @@ class HomeView(ctx: Context) : View(ctx) {
             val k = homeKeys[idx]
             if (k == HomeSlots.BLANK || AppRepo.get(k) == null) continue
             val local = idx - start
-            val ix = gridLeft + (local % cols) * cellW + cellW / 2f
-            val iy = iconCenterY(local / cols)
+            val ix = cellX(local)
+            val iy = cellIconY(local)
             val bx = ix - iconPx / 2f + dp(3f)
             val by = iy - iconPx / 2f + dp(3f)
             if (hypot(cx - bx, cy - by) < dp(22f)) {

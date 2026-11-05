@@ -97,8 +97,8 @@ class SettingsActivity : Activity() {
             "Apps en segundo plano", "Apariencia", "Batería y rendimiento", "Acerca de", "Gestos y vibración"
         )
         val CAT_SUBS = arrayOf(
-            "Cuadrícula, forma de iconos, reloj y nombres",
-            "Magnificación, rebote y tamaño",
+            "Organización, cuadrícula, iconos y reloj",
+            "30 diseños, magnificación y rebote",
             "5 formas de ver todas tus apps",
             "Abrir, volver y cambiar de página",
             "Estilo de recientes y acceso de uso",
@@ -335,14 +335,7 @@ class SettingsActivity : Activity() {
         }
         heroStatus?.invoke()
 
-        // Temas de color: tiñen todo el launcher
-        colorThemesCard(c)
-
-        // Actualizar desde GitHub, sin tienda
-        val up = card(c, dp(6f).toInt())
-        updateRow(up)
-
-        // Buscador de todos los ajustes
+        // Buscador de todos los ajustes (arriba: es lo más rápido para encontrar algo)
         val sk = card(c, dp(4f).toInt())
         val sr = LinearLayout(this)
         sr.orientation = LinearLayout.HORIZONTAL
@@ -356,15 +349,32 @@ class SettingsActivity : Activity() {
         sr.setOnClickListener { push(buildSearch()) }
         sk.addView(sr)
 
-        // Categorías agrupadas como en los Ajustes de One UI
-        val groups = arrayOf(intArrayOf(0, 1, 2), intArrayOf(3, 4, 8), intArrayOf(5, 6), intArrayOf(7))
-        for (g in groups) {
+        // Atajos a lo más usado para personalizar
+        sectionLabel(c, "Personaliza en un toque")
+        quickCard(c)
+
+        // Temas de color: tiñen todo el launcher
+        colorThemesCard(c)
+
+        // Categorías agrupadas como en los Ajustes de One UI, cada grupo con su título
+        val groups = arrayOf(
+            "Personalización" to intArrayOf(PAGE_HOME, PAGE_DOCK, PAGE_APPS, PAGE_LOOK),
+            "Movimiento" to intArrayOf(PAGE_MOTION, PAGE_GESTURES),
+            "Sistema" to intArrayOf(PAGE_RECENTS, PAGE_BATTERY),
+            "Información" to intArrayOf(PAGE_ABOUT)
+        )
+        for ((label, g) in groups) {
+            sectionLabel(c, label)
             val cc = card(c, dp(6f).toInt())
             for ((n, i) in g.withIndex()) {
                 if (n > 0) divider(cc, dp(72f))
                 categoryRow(cc, i) { push(buildCategory(i)) }
             }
         }
+
+        // Actualizar desde GitHub, sin tienda
+        val up = card(c, dp(6f).toInt())
+        updateRow(up)
         val tip = text(
             "Mantén presionado el fondo del inicio para el modo edición · desliza hacia arriba para ver todas las apps",
             12.5f, 400, OneColors.SUB
@@ -397,6 +407,14 @@ class SettingsActivity : Activity() {
                 val gp = GridPreview(this)
                 pk.addView(gp, LinearLayout.LayoutParams(-1, dp(300f).toInt()))
 
+                sectionLabel(c, "Organización")
+                val ko = card(c)
+                choice(ko, "Cómo se colocan los iconos", HomeLayout.NAMES, S.i(S.H_LAYOUT), -1, HomeLayout.DESC) {
+                    S.set(S.H_LAYOUT, it.toFloat())
+                    gp.invalidate()
+                }
+
+                sectionLabel(c, "Iconos")
                 val k0 = card(c)
                 choice(k0, "Forma de los iconos", SHAPES, Prefs.iconShape, -1, SHAPE_DESC) {
                     if (Prefs.iconShape != it) {
@@ -410,6 +428,7 @@ class SettingsActivity : Activity() {
                     }
                 }
 
+                sectionLabel(c, "Cuadrícula")
                 val k = card(c)
                 choice(k, "Columnas", COLS, (Prefs.columns - 3).coerceIn(0, 3), -1, null) {
                     Prefs.columns = it + 3
@@ -436,15 +455,17 @@ class SettingsActivity : Activity() {
                     gp.invalidate()
                 }
 
+                sectionLabel(c, "Reloj")
                 val kc = card(c)
-                choice(kc, "Reloj", CLOCK, Prefs.clockStyle, -1, null) {
+                choice(kc, "Diseño del reloj", CLOCK, Prefs.clockStyle, -1, null) {
                     Prefs.clockStyle = it
                     gp.invalidate()
                 }
-                divider(kc, 0f)
-                choice(kc, "Columnas en la vista de apps", COLS, (Prefs.drawerCols - 3).coerceIn(0, 3), -1, null) {
-                    Prefs.drawerCols = it + 3
-                }
+                val tipc = text("Mantén pulsado el reloj en el inicio para cambiar colores, formato, posición y tamaño.", 13f, 400, OneColors.SUB)
+                tipc.setPadding(dp(20f).toInt(), dp(6f).toInt(), dp(16f).toInt(), dp(4f).toInt())
+                kc.addView(tipc)
+
+                sectionLabel(c, "Fondo y apps")
                 val k2 = card(c, dp(6f).toInt())
                 button(k2, "Fondo de pantalla", null, Glyphs.WALLPAPER) {
                     tryStart(Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Fondo de pantalla"))
@@ -463,6 +484,9 @@ class SettingsActivity : Activity() {
                 }
             }
             PAGE_DOCK -> {
+                sectionLabel(c, "Diseños del dock")
+                dockDesignsCard(c)
+                sectionLabel(c, "Movimiento")
                 val k = card(c)
                 choice(k, "Magnificación", DOCK, Prefs.dockMode, PreviewView.DOCK, null) { Prefs.dockMode = it }
                 divider(k, 0f)
@@ -475,6 +499,10 @@ class SettingsActivity : Activity() {
             PAGE_APPS -> {
                 val k = card(c)
                 choice(k, "Forma de ver todas las apps", DRAWER, Prefs.drawerStyle, -1, DRAWER_DESC) { Prefs.drawerStyle = it }
+                divider(k, 0f)
+                choice(k, "Columnas", COLS, (Prefs.drawerCols - 3).coerceIn(0, 3), -1, null) {
+                    Prefs.drawerCols = it + 3
+                }
                 val k2 = card(c, dp(6f).toInt())
                 toggle(k2, "Gravedad con inclinación", "Al inclinar el móvil, los iconos ruedan (solo en la vista Gravedad)", Prefs.tilt) { Prefs.tilt = it }
             }
@@ -595,6 +623,97 @@ class SettingsActivity : Activity() {
             S.resetIds(sec.ids)
             toast("Restablecido")
             pop()
+        }
+    }
+
+    /** atajos de la portada: lo que más se cambia al personalizar, a un toque */
+    private fun quickCard(c: LinearLayout) {
+        val k = card(c, dp(12f).toInt())
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        val items = arrayOf(
+            Triple("Organizar\ninicio", Glyphs.HOME, PAGE_HOME),
+            Triple("Diseños\ndel dock", Glyphs.DOCK, PAGE_DOCK),
+            Triple("Vista\nde apps", Glyphs.GRID, PAGE_APPS),
+            Triple("Anima-\nciones", Glyphs.MOTION, PAGE_MOTION)
+        )
+        for ((label, glyph, pg) in items) {
+            val col = LinearLayout(this)
+            col.orientation = LinearLayout.VERTICAL
+            col.gravity = Gravity.CENTER_HORIZONTAL
+            col.setPadding(0, dp(6f).toInt(), 0, dp(6f).toInt())
+            col.background = ripple(dp(18f))
+            col.addView(CategoryIconView(this, glyph, OneColors.CATS[pg]), LinearLayout.LayoutParams(dp(46f).toInt(), dp(46f).toInt()))
+            val t = text(label, 12.5f, 500)
+            t.gravity = Gravity.CENTER
+            t.setPadding(0, dp(8f).toInt(), 0, 0)
+            col.addView(t)
+            col.setOnClickListener {
+                Hx.fire(it, S.HE_SETTING)
+                push(buildCategory(pg))
+            }
+            row.addView(col, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        k.addView(row)
+    }
+
+    /**
+     * Galería de los 30 diseños del dock: cada miniatura dibuja el diseño de verdad (mismo pintor que
+     * el inicio). Tocar uno lo aplica; debajo, la forma y los detalles para retocarlo.
+     */
+    private fun dockDesignsCard(c: LinearLayout) {
+        val k = card(c, dp(12f).toInt())
+        val intro = text("Toca un diseño para aplicarlo. Después puedes retocarlo abajo o en «Cristal · Dock».", 13.5f, 400, OneColors.SUB)
+        intro.setPadding(dp(18f).toInt(), 0, dp(14f).toInt(), dp(10f).toInt())
+        k.addView(intro)
+        val thumbs = ArrayList<DockDesignThumb>()
+        var paintForm: ((Int) -> Unit)? = null
+        var reflectSw: OneSwitch? = null
+        var doubleSw: OneSwitch? = null
+        var row: LinearLayout? = null
+        val perRow = 3
+        for (i in DockDesigns.LIST.indices) {
+            if (i % perRow == 0) {
+                val r = LinearLayout(this)
+                r.orientation = LinearLayout.HORIZONTAL
+                r.setPadding(dp(8f).toInt(), 0, dp(8f).toInt(), 0)
+                k.addView(r, LinearLayout.LayoutParams(-1, -2))
+                row = r
+            }
+            val t = DockDesignThumb(this, i)
+            t.picked = S.i(S.K_DESIGN) == i
+            t.setOnClickListener { v ->
+                DockDesigns.apply(i)
+                for (x in thumbs) {
+                    x.picked = x.idx == i
+                    x.invalidate()
+                }
+                paintForm?.invoke(S.i(S.K_SHAPE))
+                reflectSw?.set(S.b(S.K_REFLECT))
+                doubleSw?.set(S.b(S.K_DOUBLE))
+                Hx.fire(v, S.HE_SETTING)
+                v.animate().cancel()
+                v.scaleX = 0.9f
+                v.scaleY = 0.9f
+                v.animate().scaleX(1f).scaleY(1f).setInterpolator(android.view.animation.OvershootInterpolator(3f)).setDuration(320).start()
+                toast("Dock: " + DockDesigns.NAMES[i])
+            }
+            thumbs.add(t)
+            row?.addView(t, LinearLayout.LayoutParams(0, dp(108f).toInt(), 1f).apply {
+                leftMargin = dp(3f).toInt()
+                rightMargin = dp(3f).toInt()
+                bottomMargin = dp(6f).toInt()
+            })
+        }
+        divider(k, 0f)
+        paintForm = choice(k, "Forma", DockDesigns.FORMS, S.i(S.K_SHAPE), -1, null) { S.set(S.K_SHAPE, it.toFloat()) }
+        divider(k, 0f)
+        reflectSw = toggle(k, "Reflejo de los iconos", "Los iconos se reflejan en el cristal, como en el Mac", S.b(S.K_REFLECT)) {
+            S.set(S.K_REFLECT, if (it) 1f else 0f)
+        }
+        divider(k, 0f)
+        doubleSw = toggle(k, "Doble borde", "Un segundo filo brillante por dentro", S.b(S.K_DOUBLE)) {
+            S.set(S.K_DOUBLE, if (it) 1f else 0f)
         }
     }
 
@@ -1087,7 +1206,7 @@ class SettingsActivity : Activity() {
         return subView
     }
 
-    private fun toggle(parent: LinearLayout, title: String, sub: String?, cur: Boolean, set: (Boolean) -> Unit) {
+    private fun toggle(parent: LinearLayout, title: String, sub: String?, cur: Boolean, set: (Boolean) -> Unit): OneSwitch {
         val row = LinearLayout(this)
         row.orientation = LinearLayout.HORIZONTAL
         row.gravity = Gravity.CENTER_VERTICAL
@@ -1108,6 +1227,7 @@ class SettingsActivity : Activity() {
         row.addView(sw)
         row.setOnClickListener { sw.set(!sw.checked, true) }
         parent.addView(row)
+        return sw
     }
 
     private fun slider(parent: LinearLayout, title: String, min: Int, max: Int, cur: Int, unit: String, set: (Int) -> Unit) {
@@ -1131,7 +1251,7 @@ class SettingsActivity : Activity() {
     }
 
     /** Selector de 5 estilos (fichas) con vista previa animada y descripción opcional. */
-    private fun choice(parent: LinearLayout, title: String, names: Array<String>, cur: Int, preview: Int, desc: Array<String>?, set: (Int) -> Unit) {
+    private fun choice(parent: LinearLayout, title: String, names: Array<String>, cur: Int, preview: Int, desc: Array<String>?, set: (Int) -> Unit): (Int) -> Unit {
         val box = LinearLayout(this)
         box.orientation = LinearLayout.VERTICAL
         box.setPadding(dp(14f).toInt(), dp(8f).toInt(), dp(14f).toInt(), dp(8f).toInt())
@@ -1201,6 +1321,7 @@ class SettingsActivity : Activity() {
         box.addView(hs)
         descView?.let { box.addView(it) }
         parent.addView(box)
+        return { sel -> paint(sel) }
     }
 }
 
@@ -1374,6 +1495,9 @@ class ProgressLine(ctx: Context) : View(ctx) {
 class GridPreview(ctx: Context) : View(ctx) {
     var busy = false
     private val glass = Glass()
+    private val art = DockArt()
+    private val hg = HomeLayout.Grid()
+    private val phone = android.graphics.Path()
     private val bg = Paint(Paint.ANTI_ALIAS_FLAG)
     private val icon = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val label = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -1437,6 +1561,9 @@ class GridPreview(ctx: Context) : View(ctx) {
         val cw = pw / cols
         val ch = avail / rows
         iconS = min(iconS, min(cw - dp(12f) * k, ch - labelH - dp(8f) * k)).coerceAtLeast(dp(28f) * k)
+        // mismo estilo de organización que el inicio (Panal, Sonrisa, Dividida...)
+        HomeLayout.setup(hg, S.i(S.H_LAYOUT), cols, rows, r.left, r.right, top, avail, iconS + labelH + dp(12f) * k)
+        iconS = min(iconS, min(hg.step - dp(12f) * k, hg.cellH - labelH - dp(8f) * k)).coerceAtLeast(dp(20f) * k)
         val apps = AppRepo.apps
         val keys = Prefs.homeKeys()
         var n = 0
@@ -1445,29 +1572,43 @@ class GridPreview(ctx: Context) : View(ctx) {
                 n++
                 continue
             }
-            val cx = r.left + cw * (col + 0.5f)
-            val cy = top + ch * (row + 0.5f) - labelH / 2f
+            val cx = HomeLayout.x(hg, col, row)
+            val cy = HomeLayout.y(hg, col, row) - labelH / 2f
             val e = if (n < keys.size) AppRepo.get(keys[n]) else if (apps.isNotEmpty()) apps[(n * 5) % apps.size] else null
             drawIcon(c, e, n, cx, cy, iconS)
             if (Prefs.labels) {
                 label.alpha = 140
-                val lw = min(cw * 0.7f, iconS * 1.1f)
+                val lw = min(hg.step * 0.7f, iconS * 1.1f)
                 val lh = max(dp(2f), dp(Prefs.labelSize.toFloat()) * k * 0.45f)
                 d.set(cx - lw / 2f, cy + iconS / 2f + dp(6f) * k, cx + lw / 2f, cy + iconS / 2f + dp(6f) * k + lh)
                 c.drawRoundRect(d, lh / 2f, lh / 2f, label)
             }
             n++
         }
-        // dock
+        // dock con su forma y diseño (el mismo pintor que el inicio)
         val ds = dp(Prefs.dockDp.toFloat()) * k
-        val dw = ds * 6.4f
-        d.set(r.centerX() - dw / 2f, dockBottom - dockH, r.centerX() + dw / 2f, dockBottom)
-        glass.draw(c, d, dockH * 0.44f, 1f)
+        val unit = ds * 1.18f
+        val n5 = 5
+        val dw = unit * n5 + dp(20f) * k
+        val form = S.i(S.K_SHAPE)
+        val m = art.settingsMat()
+        val dcy = dockBottom - dockH / 2f
+        phone.reset()
+        phone.addRoundRect(r, dp(22f), dp(22f), android.graphics.Path.Direction.CW)
+        c.save()
+        c.clipPath(phone) // la Pestaña llega al borde: que no se salga de las esquinas del "móvil"
+        c.translate(r.left, 0f)
+        art.bodyRect(form, d, pw, dw, dcy, dockH, r.bottom)
+        if (m != null) art.drawBody(c, form, d, dockH, 1f, m, S.b(S.K_DOUBLE))
         val dk = Prefs.dockKeys()
-        for (i in 0 until 5) {
+        val x0 = (pw - unit * n5) / 2f
+        for (i in 0 until n5) {
             val e = if (i < dk.size) AppRepo.get(dk[i]) else null
-            drawIcon(c, e, i + 3, d.left + dw * (i + 0.7f) / 5.4f + ds * 0.35f, d.centerY(), ds)
+            val cx = x0 + unit * (i + 0.5f)
+            if (m != null && DockDesigns.perIcon(form)) art.drawTile(c, form, cx, dcy, ds, 1f, m)
+            drawIcon(c, e, i + 3, cx, dcy, ds)
         }
+        c.restore()
         if (busy) {
             d.set(r.centerX() - dp(90f), r.centerY() - dp(20f), r.centerX() + dp(90f), r.centerY() + dp(20f))
             glass.draw(c, d, dp(20f), 1f)
@@ -1571,5 +1712,96 @@ class ColorDot(ctx: Context, private val color: Int, private val auto: Boolean) 
             c.drawCircle(cx, cy, r + dp(3f), ring)
         }
         if (auto) Glyphs.draw(c, Glyphs.CHECK, cx, cy, r * 1.1f, 0xCCFFFFFF.toInt(), if (picked) 1f else 0f)
+    }
+}
+
+/**
+ * Miniatura de un diseño del dock: un trocito de pantalla con el dock dibujado con ese diseño
+ * (forma, cristal, reflejo...) y tus iconos del dock. Se dibuja una vez; no anima en reposo.
+ */
+class DockDesignThumb(ctx: Context, val idx: Int) : View(ctx) {
+    var picked = false
+    private val art = DockArt()
+    private val mat = GlassMat()
+    private val bg = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val icon = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val label = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.WHITE
+        textAlign = Paint.Align.CENTER
+        typeface = Typeface.create(Typeface.DEFAULT, 500, false)
+    }
+    private val r = RectF()
+    private val d = RectF()
+    private val dst = RectF()
+    private val clip = android.graphics.Path()
+    private val colors = intArrayOf(0xFF5AC8FA.toInt(), 0xFFFF9F0A.toInt(), 0xFF34C759.toInt(), 0xFFFF375F.toInt())
+
+    init {
+        isClickable = true
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
+        bg.shader = LinearGradient(0f, 0f, w.toFloat(), h.toFloat(), intArrayOf(0xFF2B4FC4.toInt(), 0xFF5B2FA8.toInt(), 0xFF1A1440.toInt()), null, Shader.TileMode.CLAMP)
+    }
+
+    private fun bitmapFor(k: Int, keys: List<String>): android.graphics.Bitmap? {
+        if (k < keys.size) AppRepo.get(keys[k])?.icon?.let { return it }
+        val apps = AppRepo.apps
+        return if (apps.isNotEmpty()) apps[(k * 7 + 2) % apps.size].icon else null
+    }
+
+    override fun onDraw(c: Canvas) {
+        val dz = DockDesigns.LIST[idx]
+        val labelH = dp(22f)
+        r.set(dp(3f), dp(3f), width - dp(3f), height - labelH)
+        clip.reset()
+        clip.addRoundRect(r, dp(14f), dp(14f), android.graphics.Path.Direction.CW)
+        c.save()
+        c.clipPath(clip)
+        c.drawRect(r, bg)
+        DockDesigns.mat(idx, mat)
+        val h = r.height() * 0.42f
+        val cy = r.bottom - h / 2f - dp(7f)
+        val n = 4
+        val size = min(h * 0.62f, (r.width() - dp(24f)) / (n * 1.22f))
+        val unit = size * 1.22f
+        val capW = unit * n + dp(8f)
+        c.translate(r.left, 0f)
+        art.bodyRect(dz.form, d, r.width(), capW, cy, h, r.bottom)
+        art.drawBody(c, dz.form, d, h, 1f, mat, dz.double)
+        val keys = Prefs.dockKeys()
+        val x0 = (r.width() - unit * n) / 2f
+        for (k in 0 until n) {
+            val cx = x0 + unit * (k + 0.5f)
+            if (DockDesigns.perIcon(dz.form)) art.drawTile(c, dz.form, cx, cy, size, 1f, mat)
+            val b = bitmapFor(k, keys)
+            dst.set(cx - size / 2f, cy - size / 2f, cx + size / 2f, cy + size / 2f)
+            if (b != null) {
+                if (dz.reflect && dz.form != DockDesigns.F_NONE) {
+                    c.save()
+                    c.clipRect(d.left, dst.bottom, d.right, min(d.bottom, cy + h / 2f))
+                    c.scale(1f, -1f, cx, dst.bottom)
+                    icon.alpha = 56
+                    c.drawBitmap(b, null, dst, icon)
+                    c.restore()
+                }
+                icon.alpha = 255
+                c.drawBitmap(b, null, dst, icon)
+            } else {
+                icon.color = colors[k % colors.size]
+                c.drawRoundRect(dst, size * 0.26f, size * 0.26f, icon)
+            }
+        }
+        c.restore()
+        if (picked) {
+            ring.color = OneColors.ACCENT
+            ring.strokeWidth = dp(2.5f)
+            c.drawRoundRect(r.left - dp(1.5f), r.top - dp(1.5f), r.right + dp(1.5f), r.bottom + dp(1.5f), dp(15f), dp(15f), ring)
+        }
+        label.textSize = dp(12f)
+        label.alpha = if (picked) 255 else 205
+        val name = TextUtils.ellipsize(dz.name, label, width - dp(6f), TextUtils.TruncateAt.END).toString()
+        c.drawText(name, width / 2f, height - dp(6f), label)
     }
 }

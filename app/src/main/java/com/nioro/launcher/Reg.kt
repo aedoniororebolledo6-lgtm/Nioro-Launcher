@@ -601,6 +601,7 @@ object S {
     val H_REMOVE_DRAG = bool("home.removedrag", "Quitar arrastrando hacia arriba", C_HOME, HG, true)
     val H_SCALE_PANEL = num("home.panelscale", "Alejar el inicio al abrir paneles", C_HOME, HG, 0f, 25f, 8f)
     val H_DEFAULT_PAGE = num("home.defpage", "Página principal", C_HOME, HG, 1f, 6f, 1f, "")
+    val H_LAYOUT = choice("home.layout", "Organización de los iconos", C_HOME, HG, HomeLayout.NAMES, 0, "Panal, Sonrisa, Ola, Dividida... (las apps no cambian de sitio)")
     private const val DG = "Puntos de página"
     val D_SHOW = bool("dots.show", "Mostrar indicador de páginas", C_HOME, DG, true)
     val D_STYLE = choice("dots.style", "Estilo", C_HOME, DG, arrayOf("Puntos", "Líneas", "Cápsula activa", "Números", "Píldora One UI"), 4)
@@ -639,6 +640,7 @@ object S {
     // 9) DOCK
     // ==================================================================
     private const val KG = "General"
+    private const val KS = "Diseño del dock"
     val K_SHOW = bool("dock.show", "Mostrar dock", C_DOCK, KG, true)
     val K_LAUNCHPAD = bool("dock.lp", "Botón Launchpad", C_DOCK, KG, true)
     val K_RECENTS = bool("dock.rec", "Botón Recientes", C_DOCK, KG, true)
@@ -648,8 +650,13 @@ object S {
     val K_BOTTOM = num("dock.bottom", "Distancia al borde inferior", C_DOCK, KG, 0f, 60f, 12f, " dp")
     val K_EXTRA_W = num("dock.extraw", "Ancho extra de la cápsula", C_DOCK, KG, 0f, 80f, 20f, " dp")
     val K_EXTRA_H = num("dock.extrah", "Alto extra de la cápsula", C_DOCK, KG, -10f, 40f, 22f, " dp")
-    val K_SHAPE = choice("dock.shape", "Forma del dock", C_DOCK, KG, arrayOf("Cápsula flotante", "Barra completa", "Sin fondo"), 0)
+    // las 3 primeras formas son las de siempre (mismos números): los valores guardados siguen valiendo
+    val K_SHAPE = choice("dock.shape", "Forma del dock", C_DOCK, KS, DockDesigns.FORMS, 0)
     val K_MAX_SCALE = num("dock.maxscale", "Escala máxima al magnificar", C_DOCK, KG, 100f, 250f, 190f)
+    // solo recuerda qué miniatura marcar en la galería (aplicar un diseño cambia los ajustes de verdad)
+    val K_DESIGN = choice("dock.design", "Diseño elegido", C_DOCK, "_interno", DockDesigns.NAMES, 0)
+    val K_REFLECT = bool("dock.reflect", "Reflejo de los iconos", C_DOCK, KS, false, "Los iconos se reflejan en el cristal, como en el Mac")
+    val K_DOUBLE = bool("dock.double", "Doble borde", C_DOCK, KS, false, "Un segundo filo brillante por dentro del dock")
     private const val KD = "Apps abiertas"
     val K_DOTS = bool("dock.dots", "Puntos de apps abiertas", C_DOCK, KD, true)
     val K_DOT_COLOR = color("dock.dotc", "Color de los puntos", C_DOCK, KD, 1)

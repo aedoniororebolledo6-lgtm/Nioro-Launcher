@@ -160,59 +160,50 @@ class Glass {
     private fun filter(color: Int): android.graphics.ColorFilter =
         filters.getOrPut(color) { android.graphics.PorterDuffColorFilter(color, android.graphics.PorterDuff.Mode.MULTIPLY) }
 
+    private val mat = GlassMat()
+
     /**
      * Dibuja el cristal. [surf] es la superficie (S.SF_*): con ella se aplican sus 19 ajustes
      * (tinte, borde, lente, sombra, tamaño...). Con -1 se usa el estilo base.
      */
     fun draw(c: Canvas, r0: RectF, rad0: Float, a: Float = 1f, shadow: Boolean = true, surf: Int = -1) {
+        mat.reset()
+        if (surf >= 0 && !mat.fromSurface(surf)) return
+        drawMat(c, r0, rad0, a, shadow, mat, null)
+    }
+
+    /**
+     * Dibuja el cristal con un material dado ([m]) en vez de leerlo de los ajustes: así las miniaturas
+     * de los diseños del dock enseñan cada diseño sin aplicarlo. Con [shape] se usa esa forma (estante,
+     * ola, cúpula...) en lugar del rectángulo de esquinas continuas; debe estar ya colocada en [r0].
+     */
+    fun drawMat(c: Canvas, r0: RectF, rad0: Float, a: Float, shadow: Boolean, m: GlassMat, shape: Path?) {
         var r = r0
-        var rad = rad0
-        var al = if (a > 1f) 1f else a
-        var tint = Color.rgb(12, 20, 44)
-        var tintOp = 1f
-        var kMul = 1f
-        var rimW = 1f
-        var rimB = 1f
-        var rimColor = 0
-        var lensM = 1f
-        var lensH = 0.58f
-        var causM = 1f
-        var innerM = 1f
-        var shOn = shadow
-        var shS = 1f
-        var shY = 1f
-        var grad = false
-        var tint2 = 0
-        if (surf >= 0) {
-            if (!S.b(S.gp(surf, S.GP_VISIBLE))) return
-            val size = S.p(S.gp(surf, S.GP_SIZE))
-            if (size != 1f) {
-                val dw = r0.width() * (size - 1f) / 2f
-                val dh = r0.height() * (size - 1f) / 2f
-                rr2.set(r0.left - dw, r0.top - dh, r0.right + dw, r0.bottom + dh)
-                r = rr2
-            }
-            tint = S.col(S.gp(surf, S.GP_TINT), tint)
-            tintOp = S.p(S.gp(surf, S.GP_TINT_OP))
-            kMul = S.p(S.gp(surf, S.GP_INTENSITY))
-            rad *= S.p(S.gp(surf, S.GP_RADIUS))
-            rimW = S.p(S.gp(surf, S.GP_RIM_W))
-            rimB = S.p(S.gp(surf, S.GP_RIM_B))
-            rimColor = S.col(S.gp(surf, S.GP_RIM_COLOR), 0)
-            lensM = S.p(S.gp(surf, S.GP_LENS))
-            lensH = S.p(S.gp(surf, S.GP_LENS_H))
-            causM = S.p(S.gp(surf, S.GP_CAUSTIC))
-            innerM = S.p(S.gp(surf, S.GP_INNER))
-            shOn = shadow && S.b(S.gp(surf, S.GP_SHADOW))
-            shS = S.p(S.gp(surf, S.GP_SHADOW_S))
-            shY = S.p(S.gp(surf, S.GP_SHADOW_Y))
-            al *= S.p(S.gp(surf, S.GP_ALPHA))
-            grad = S.b(S.gp(surf, S.GP_GRAD))
-            if (grad) tint2 = S.col(S.gp(surf, S.GP_TINT2), 0xFF8B5CF6.toInt())
-            if (al > 1f) al = 1f
+        var al = (if (a > 1f) 1f else a) * m.alpha
+        if (al > 1f) al = 1f
+        if (m.size != 1f && shape == null) {
+            val dw = r0.width() * (m.size - 1f) / 2f
+            val dh = r0.height() * (m.size - 1f) / 2f
+            rr2.set(r0.left - dw, r0.top - dh, r0.right + dw, r0.bottom + dh)
+            r = rr2
         }
         if (al <= 0.01f || r.width() < 1f || r.height() < 1f) return
-        var k = Prefs.glass / 60f * kMul
+        val rad = rad0 * m.radius
+        val tint = m.tint
+        val tintOp = m.tintOp
+        val rimW = m.rimW
+        val rimB = m.rimB
+        val rimColor = m.rimColor
+        val lensM = m.lens
+        val lensH = m.lensH
+        val causM = m.caustic
+        val innerM = m.inner
+        val shOn = shadow && m.shadow
+        val shS = m.shadowS
+        val shY = m.shadowY
+        val grad = m.grad
+        val tint2 = m.tint2
+        var k = Prefs.glass / 60f * m.intensity
         if (k < 0.2f) k = 0.2f
         if (k > 2f) k = 2f
         val rr = maxOf(0f, minOf(rad, r.height() / 2f, r.width() / 2f))
@@ -222,16 +213,28 @@ class Glass {
             val g1 = dp(6f)
             if (shadowQ == 2) {
                 sh.color = Color.argb((26f * al * shS).toInt().coerceIn(0, 255), 0, 0, 0)
-                Squircle.path(pShadow, r.left - g1 * 0.5f, r.top + g1 * 0.6f * shY, r.right + g1 * 0.5f, r.bottom + g1 * 1.6f * shY, rr + g1)
+                if (shape != null) {
+                    pShadow.set(shape)
+                    pShadow.offset(0f, g1 * 1.1f * shY)
+                } else {
+                    Squircle.path(pShadow, r.left - g1 * 0.5f, r.top + g1 * 0.6f * shY, r.right + g1 * 0.5f, r.bottom + g1 * 1.6f * shY, rr + g1)
+                }
                 c.drawPath(pShadow, sh)
             }
             sh.color = Color.argb((22f * al * shS).toInt().coerceIn(0, 255), 0, 0, 0)
             val g2 = dp(2f)
-            Squircle.path(pShadow, r.left, r.top + g2 * shY, r.right, r.bottom + g2 * 1.5f * shY, rr + g2)
+            if (shape != null) {
+                pShadow.set(shape)
+                pShadow.offset(0f, g2 * 1.2f * shY)
+            } else {
+                Squircle.path(pShadow, r.left, r.top + g2 * shY, r.right, r.bottom + g2 * 1.5f * shY, rr + g2)
+            }
             c.drawPath(pShadow, sh)
         }
 
         // cuerpo teñido (color sólido o degradado)
+        val body: Path = shape ?: pBody
+        if (shape == null) Squircle.path(pBody, r, rr)
         val baseA = minOf(230f, 58f * al * k * tintOp).toInt().coerceIn(0, 255)
         if (grad) {
             if (gradShader == null || gradA != tint || gradB != tint2) {
@@ -239,66 +242,74 @@ class Glass {
                 gradA = tint
                 gradB = tint2
             }
-            m.setScale(r.width(), r.height())
-            m.postTranslate(r.left, r.top)
-            gradShader!!.setLocalMatrix(m)
+            this.m.setScale(r.width(), r.height())
+            this.m.postTranslate(r.left, r.top)
+            gradShader!!.setLocalMatrix(this.m)
             base.shader = gradShader
             base.alpha = baseA
         } else {
             base.shader = null
             base.color = (tint and 0x00FFFFFF) or (baseA shl 24)
         }
-        Squircle.path(pBody, r, rr)
-        c.drawPath(pBody, base)
+        c.drawPath(body, base)
 
         val fa = minOf(1f, al * minOf(1.35f, k))
-        m.setScale(1f, r.height())
-        m.postTranslate(0f, r.top)
-        fillShader.setLocalMatrix(m)
+        this.m.setScale(1f, r.height())
+        this.m.postTranslate(0f, r.top)
+        fillShader.setLocalMatrix(this.m)
         fill.shader = fillShader
         fill.alpha = (255f * fa).toInt()
-        c.drawPath(pBody, fill)
+        c.drawPath(body, fill)
 
         // lente superior
         if (lensM > 0.01f) {
             val inset = minOf(dp(3f), r.height() * 0.08f)
             tmp.set(r.left + inset, r.top + inset, r.right - inset, r.top + r.height() * lensH)
-            m.setScale(1f, tmp.height())
-            m.postTranslate(0f, tmp.top)
-            lensShader.setLocalMatrix(m)
+            this.m.setScale(1f, tmp.height())
+            this.m.postTranslate(0f, tmp.top)
+            lensShader.setLocalMatrix(this.m)
             lens.shader = lensShader
             lens.alpha = (255f * fa * lensM).toInt().coerceIn(0, 255)
-            val lr = maxOf(0f, rr - inset)
-            Squircle.path(pLens, tmp, lr)
-            c.drawPath(pLens, lens)
+            if (shape != null) {
+                // forma especial: el degradado de la lente ya se apaga solo bajo su altura
+                c.drawPath(shape, lens)
+            } else {
+                val lr = maxOf(0f, rr - inset)
+                Squircle.path(pLens, tmp, lr)
+                c.drawPath(pLens, lens)
+            }
         }
 
         // cáustica inferior
         if (causM > 0.01f) {
-            m.setScale(1f, r.height())
-            m.postTranslate(0f, r.top)
-            causticShader.setLocalMatrix(m)
+            this.m.setScale(1f, r.height())
+            this.m.postTranslate(0f, r.top)
+            causticShader.setLocalMatrix(this.m)
             caustic.shader = causticShader
             caustic.alpha = (255f * fa * causM).toInt().coerceIn(0, 255)
-            c.drawPath(pBody, caustic)
+            c.drawPath(body, caustic)
         }
 
         // borde especular
         val sw = dp(0.9f) * rimW
         if (sw > 0.05f) {
             rim.strokeWidth = sw
-            m.setScale(r.width(), r.height())
-            m.postTranslate(r.left, r.top)
-            rimShader.setLocalMatrix(m)
+            this.m.setScale(r.width(), r.height())
+            this.m.postTranslate(r.left, r.top)
+            rimShader.setLocalMatrix(this.m)
             rim.shader = rimShader
             rim.colorFilter = if (rimColor != 0) filter(rimColor) else null
             rim.alpha = (255f * minOf(1f, al * minOf(1.2f, k) * rimB)).toInt().coerceIn(0, 255)
-            val hw = sw / 2f
-            Squircle.path(pRim, r.left + hw, r.top + hw, r.right - hw, r.bottom - hw, maxOf(0f, rr - hw))
-            c.drawPath(pRim, rim)
+            if (shape != null) {
+                c.drawPath(shape, rim)
+            } else {
+                val hw = sw / 2f
+                Squircle.path(pRim, r.left + hw, r.top + hw, r.right - hw, r.bottom - hw, maxOf(0f, rr - hw))
+                c.drawPath(pRim, rim)
+            }
         }
-        // borde interior oscuro
-        if (innerM > 0.01f) {
+        // borde interior oscuro (solo en la forma de esquinas continuas)
+        if (innerM > 0.01f && shape == null) {
             val iw = dp(1.1f)
             inner.strokeWidth = iw
             inner.color = Color.argb((34f * al * innerM).toInt().coerceIn(0, 255), 0, 0, 0)
@@ -309,7 +320,83 @@ class Glass {
         // filo exterior de un pelo (0,6 dp) que da definición al borde, como los recuadros de Apple
         hair.strokeWidth = dp(0.6f)
         hair.color = Color.argb((30f * al).toInt().coerceIn(0, 255), 0, 0, 0)
-        c.drawPath(pBody, hair)
+        c.drawPath(body, hair)
+    }
+}
+
+/**
+ * Material de una superficie de cristal (los mismos 19 ajustes de S, ya convertidos a números listos
+ * para dibujar). Se rellena desde los ajustes ([fromSurface]) o a mano (diseños del dock).
+ */
+class GlassMat {
+    var visible = true
+    var size = 1f
+    var tint = Color.rgb(12, 20, 44)
+    var tintOp = 1f
+    var intensity = 1f
+    var radius = 1f
+    var rimW = 1f
+    var rimB = 1f
+    /** 0 = borde blanco de siempre */
+    var rimColor = 0
+    var lens = 1f
+    var lensH = 0.58f
+    var caustic = 1f
+    var inner = 1f
+    var shadow = true
+    var shadowS = 1f
+    var shadowY = 1f
+    var alpha = 1f
+    var grad = false
+    var tint2 = 0xFF8B5CF6.toInt()
+
+    /** estilo base (el de una superficie sin ajustes) */
+    fun reset(): GlassMat {
+        visible = true
+        size = 1f
+        tint = Color.rgb(12, 20, 44)
+        tintOp = 1f
+        intensity = 1f
+        radius = 1f
+        rimW = 1f
+        rimB = 1f
+        rimColor = 0
+        lens = 1f
+        lensH = 0.58f
+        caustic = 1f
+        inner = 1f
+        shadow = true
+        shadowS = 1f
+        shadowY = 1f
+        alpha = 1f
+        grad = false
+        tint2 = 0xFF8B5CF6.toInt()
+        return this
+    }
+
+    /** lee los ajustes de la superficie [surf]; false si está oculta */
+    fun fromSurface(surf: Int): Boolean {
+        visible = S.b(S.gp(surf, S.GP_VISIBLE))
+        if (!visible) return false
+        size = S.p(S.gp(surf, S.GP_SIZE))
+        tint = S.col(S.gp(surf, S.GP_TINT), tint)
+        tintOp = S.p(S.gp(surf, S.GP_TINT_OP))
+        intensity = S.p(S.gp(surf, S.GP_INTENSITY))
+        radius = S.p(S.gp(surf, S.GP_RADIUS))
+        rimW = S.p(S.gp(surf, S.GP_RIM_W))
+        rimB = S.p(S.gp(surf, S.GP_RIM_B))
+        rimColor = S.col(S.gp(surf, S.GP_RIM_COLOR), 0)
+        lens = S.p(S.gp(surf, S.GP_LENS))
+        lensH = S.p(S.gp(surf, S.GP_LENS_H))
+        caustic = S.p(S.gp(surf, S.GP_CAUSTIC))
+        inner = S.p(S.gp(surf, S.GP_INNER))
+        shadow = S.b(S.gp(surf, S.GP_SHADOW))
+        shadowS = S.p(S.gp(surf, S.GP_SHADOW_S))
+        shadowY = S.p(S.gp(surf, S.GP_SHADOW_Y))
+        alpha = S.p(S.gp(surf, S.GP_ALPHA))
+        grad = S.b(S.gp(surf, S.GP_GRAD))
+        if (grad) tint2 = S.col(S.gp(surf, S.GP_TINT2), 0xFF8B5CF6.toInt())
+        return true
     }
 }
 
