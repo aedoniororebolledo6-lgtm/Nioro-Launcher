@@ -130,9 +130,13 @@ class HomeView(ctx: Context) : View(ctx) {
     private val sheetPull = SpringValue(0f, 360f, 30f, 0.3f)
     /** los puntos de página aparecen/desaparecen suaves cuando cambia el número de pantallas */
     private val dotsVis = SpringValue(0f, 300f, 30f, 0.002f)
+    /** cambio de diseño del dock: el fondo nuevo entra con un estirón elástico (0 → 1) */
+    private val dockMorph = SpringValue(1f, 200f, 14f, 0.002f)
+    /** huella del diseño del dock dibujado (forma, diseño y su cristal) para notar cuándo cambia */
+    private var dockStamp = Long.MIN_VALUE
     private var lastDotsN = 2
     private val extraSprings = arrayOf(dragLift, dragTilt, dropX, dropY, clockSp, dotsBoost, clockEd, clockPop, clockSqu, ckX, ckY, ckS, chipPulse,
-        tabSp, tabFade, sheetPull, dotsVis)
+        tabSp, tabFade, sheetPull, dotsVis, dockMorph)
 
     // ---- cada icono del inicio tiene su posición y escala con resorte: así se desliza a su sitio
     // nuevo al reordenar, vuela desde el dedo al soltarlo, crece al llegar y se encoge al irse
@@ -541,7 +545,38 @@ class HomeView(ctx: Context) : View(ctx) {
 
     fun refreshStyle() {
         relayout()
+        checkDockDesign()
         invalidate()
+    }
+
+    private fun dockDesignStamp(): Long {
+        var h = S.i(S.K_SHAPE).toLong()
+        h = h * 31 + S.i(S.K_DESIGN)
+        h = h * 31 + (if (S.b(S.K_REFLECT)) 1 else 0) + (if (S.b(S.K_DOUBLE)) 2 else 0)
+        for (p in intArrayOf(S.GP_TINT, S.GP_TINT2, S.GP_GRAD, S.GP_RIM_COLOR, S.GP_TINT_OP, S.GP_RIM_W)) h = h * 31 + S.i(S.gp(S.SF_DOCK, p))
+        return h
+    }
+
+    /**
+     * Si al volver de Ajustes el dock tiene otro diseño, se nota con una animación: el fondo nuevo
+     * entra estirándose con rebote y los iconos se inflan uno tras otro (antes cambiaba de golpe).
+     */
+    private fun checkDockDesign() {
+        val st = dockDesignStamp()
+        val before = dockStamp
+        dockStamp = st
+        if (before == Long.MIN_VALUE || before == st || !S.b(S.K_SHOW)) return
+        Mo.tune(dockMorph, S.MO_DOCK_MAG, 190f, 0.5f)
+        dockMorph.snap(0f)
+        dockMorph.to(1f)
+        for ((i, s) in slots.withIndex()) {
+            if (s.kind == 3) continue
+            Mo.tune(s.gw, S.MO_DOCK_MAG, 240f, 0.45f)
+            // cada icono empieza un poco más pequeño que el anterior: llegan en cascada
+            s.gw.snap((0.55f - i * 0.05f).coerceAtLeast(0.2f))
+            s.gw.to(1f)
+        }
+        ticker.kick()
     }
 
     // ---------------------------------------------------------------- Layout
@@ -644,6 +679,8 @@ class HomeView(ctx: Context) : View(ctx) {
         iconPx = min(iconPx, min(hg.step - dp(12f), hg.cellH - labelH - dp(8f))).coerceAtLeast(dp(28f))
         labelCache.clear()
         rebuildDock()
+        // primera vez: se apunta el diseño actual del dock (para animar si luego cambia)
+        if (dockStamp == Long.MIN_VALUE) dockStamp = dockDesignStamp()
     }
 
     private fun applyStyles() {
@@ -2494,7 +2531,20 @@ class HomeView(ctx: Context) : View(ctx) {
         val form = S.i(S.K_SHAPE)
         val dm = dockArt.settingsMat()
         dockArt.bodyRect(form, capRect, w, capW, dockCy + dy, dockH, height.toFloat() + dy)
-        if (dm != null) dockArt.drawBody(c, form, capRect, dockH, a, dm, S.b(S.K_DOUBLE))
+        val mv = dockMorph.value
+        if (dm != null) {
+            if (mv < 0.999f || dockMorph.active) {
+                // diseño nuevo: el fondo sale del pie del dock estirándose con rebote (como gelatina)
+                val sy = max(0.05f, mv)
+                val sx = 0.78f + 0.22f * min(mv, 1.2f)
+                c.save()
+                c.scale(sx, sy, capRect.centerX(), dockCy + dockH / 2f + dy)
+                dockArt.drawBody(c, form, capRect, dockH, a * clamp01(mv * 1.6f), dm, S.b(S.K_DOUBLE))
+                c.restore()
+            } else {
+                dockArt.drawBody(c, form, capRect, dockH, a, dm, S.b(S.K_DOUBLE))
+            }
+        }
         val tiles = dm != null && DockDesigns.perIcon(form)
         val reflect = S.b(S.K_REFLECT) && form != DockDesigns.F_NONE
         // borde de abajo del dock (en la Pestaña el fondo llega hasta el final de la pantalla)

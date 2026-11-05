@@ -80,6 +80,11 @@ hold() { timeout 20 adb shell input swipe "$1" "$2" "$1" "$2" 1300; }
   SVALS="dock.shape=6,glass.0.tint=2,glass.0.tintop=170" prefs 0; start; shot 26_dock_pestana 2
   SVALS="dock.shape=9,glass.0.rimc=4" prefs 0; start; shot 27_dock_linea 2
   SVALS="dock.shape=12" prefs 0; start; shot 28_dock_cupula 2
+  # vídeos: pasar el dedo por el dock (magnificación) con Burbujas, Ola y Estante
+  g_scrub() { timeout 20 adb shell input swipe 160 2075 920 2075 1800; }
+  SVALS="dock.shape=7" prefs 0; start; rec v9_dock_burbujas g_scrub
+  SVALS="dock.shape=11,glass.0.tint=3,glass.0.tintop=90" prefs 0; start; rec v10_dock_ola g_scrub
+  SVALS="dock.shape=5,dock.reflect=1" prefs 0; start; rec v11_dock_estante g_scrub
   # Ajustes: portada y galería de diseños del dock
   prefs 0; timeout 60 adb shell am start -W -n $P/.SettingsActivity > /dev/null 2>&1; sleep 5; shot 30_ajustes 1
   timeout 20 adb shell input swipe 540 1800 540 600 400; sleep 2; shot 31_ajustes_abajo 1
