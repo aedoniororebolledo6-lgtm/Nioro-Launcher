@@ -89,13 +89,42 @@ class RecentsView(ctx: Context) : View0(ctx) {
         var ay = 0f
         /** lanzada con fuerza: vuela sin resorte y, al salir de la pantalla, se cierra */
         var flying = false
+        /** gelatina: tiembla al soltarla o al chocar (estira a lo ancho y encoge a lo alto) */
+        var wob = 0f
+        var wobV = 0f
+        /** velocidad suavizada mientras el dedo la arrastra (para estirarla en esa dirección) */
+        var gvx = 0f
+        var gvy = 0f
+        var lastX = 0f
+        var lastY = 0f
         val phase = (key.hashCode() and 0xFFFF) / 65535f * 6.2832f
         val speed = 0.75f + ((key.hashCode() ushr 8) and 0xFF) / 255f * 0.5f
     }
 
-    /** estallido de una burbuja eliminada: anillo que se abre y gotitas que salen */
-    private class Pop(val x: Float, val y: Float, val size: Float, val e: AppEntry) {
+    /**
+     * Estallido de una burbuja eliminada. Fases (t de 0 a 1 en ~0,6 s): se hincha un poco más,
+     * revienta con un destello, un anillo se abre y gotas de distintos tamaños salen despedidas y caen.
+     */
+    private class Pop(val x: Float, val y: Float, val size: Float, val start: Float, val e: AppEntry) {
         var t = 0f
+        val n = 11
+        val ang = FloatArray(n)
+        val spd = FloatArray(n)
+        val sz = FloatArray(n)
+
+        init {
+            // gotas repartidas alrededor con un poco de desorden (siempre igual para la misma app)
+            var h = e.key.hashCode()
+            for (i in 0 until n) {
+                h = h * 1103515245 + 12345
+                val r1 = ((h ushr 8) and 0xFFFF) / 65535f
+                h = h * 1103515245 + 12345
+                val r2 = ((h ushr 8) and 0xFFFF) / 65535f
+                ang[i] = i * (6.2832f / n) + (r1 - 0.5f) * 0.5f
+                spd[i] = 0.55f + r2 * 0.7f
+                sz[i] = 0.6f + ((r1 + r2) * 0.5f) * 0.9f
+            }
+        }
     }
 
     private val bubs = ArrayList<Bub>()
@@ -106,6 +135,11 @@ class RecentsView(ctx: Context) : View0(ctx) {
     private var grabDX = 0f
     private var grabDY = 0f
     private val grabLift = ticker.add(SpringValue(1f, 420f, 26f, 0.001f))
+    /** mantener pulsada: la burbuja se va hinchando y tiembla hasta estallar */
+    private val holdSp = ticker.add(SpringValue(0f, 380f, 20f, 0.002f))
+    private var holdIdx = -1
+    private var holdVis = -1
+    private var holdStart = 0L
     private val bubArt = DockArt()
     private val bubMat = GlassMat()
     private val ringPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
@@ -118,6 +152,26 @@ class RecentsView(ctx: Context) : View0(ctx) {
             releasePress()
             removeBubble(i, true)
         }
+    }
+
+    private fun easeOut(t: Float): Float {
+        val k = 1f - clamp01(t)
+        return 1f - k * k * k
+    }
+
+    /** curva de "globo": pasa un poco de su tamaño y vuelve (como iOS al aparecer) */
+    private fun popCurve(q: Float): Float {
+        val t = clamp01(q) - 1f
+        return 1f + 2.7f * t * t * t + 1.7f * t * t
+    }
+
+    /** suelta la pulsación larga: la burbuja se deshincha con un resorte */
+    private fun endHold() {
+        if (holdIdx < 0) return
+        holdIdx = -1
+        Mo.tune(holdSp, S.MO_RELEASE, 380f, 0.5f)
+        holdSp.to(0f)
+        ticker.kick()
     }
 
     /** sitio de la burbuja i en la espiral (cx, cy) y su tamaño */
@@ -141,7 +195,20 @@ class RecentsView(ctx: Context) : View0(ctx) {
         val h = height.toFloat()
         val dt = min(dt0, 0.033f) / 2f
         val fa = dp(7f)
+        // la agarrada: velocidad del dedo suavizada (para estirarla hacia donde va)
+        bubs.getOrNull(grab)?.let { g ->
+            val inv = 1f / max(0.004f, dt0)
+            g.gvx = lerp(g.gvx, (g.x - g.lastX) * inv, 0.35f)
+            g.gvy = lerp(g.gvy, (g.y - g.lastY) * inv, 0.35f)
+            g.lastX = g.x
+            g.lastY = g.y
+        }
         repeat(2) {
+            // gelatina: un resorte poco amortiguado que vuelve a la forma redonda temblando
+            for (b in bubs) {
+                b.wobV += (-b.wob * 320f - b.wobV * 7f) * dt
+                b.wob += b.wobV * dt
+            }
             for (i in bubs.indices) {
                 val b = bubs[i]
                 bubbleHome(i)
@@ -186,6 +253,10 @@ class RecentsView(ctx: Context) : View0(ctx) {
                     a.vy -= ny * push * ka
                     b.vx += nx * push * kb
                     b.vy += ny * push * kb
+                    // al chocar se aplastan un poco, como gelatina
+                    val jig = min(0.9f, push * 0.012f)
+                    a.wobV += jig * ka
+                    b.wobV += jig * kb
                 }
             }
             for (i in bubs.indices) {
@@ -213,7 +284,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
             val b = bubs[i]
             if (b.flying && (b.x < -dp(120f) || b.x > w + dp(120f) || b.y < -dp(120f) || b.y > h + dp(120f))) removeBubble(i, false)
         }
-        for (p in pops) p.t += dt0 / 0.42f
+        for (p in pops) p.t += dt0 / 0.62f
         pops.removeAll { it.t >= 1f }
     }
 
@@ -222,6 +293,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
         if (style != 4 || !isShown || progress <= 0.01f) return false
         if (items.isEmpty() && pops.isEmpty()) return false
         floatT += dt
+        if (holdIdx >= 0) holdSp.snap(clamp01((android.os.SystemClock.uptimeMillis() - holdStart) / max(1f, S.f(S.G_LONG_MS))))
         stepBubbles(dt)
         // mientras las burbujas se ven, flotan (al cerrar recientes se detiene solo)
         return true
@@ -234,13 +306,31 @@ class RecentsView(ctx: Context) : View0(ctx) {
         val e = items[i]
         if (pop) {
             bubbleHome(i)
-            pops.add(Pop(b.x, b.y, homeS * grabLift.value.coerceAtLeast(1f), e))
+            val start = 1f + 0.16f * easeOut(if (holdVis == i) holdSp.value else 0f)
+            pops.add(Pop(b.x, b.y, homeS, start, e))
             Hx.fire(this, S.HE_LONG)
+            // onda del estallido: las burbujas cercanas se apartan un poco y tiemblan
+            for ((k, o) in bubs.withIndex()) {
+                if (k == i || o.flying) continue
+                val dx = o.x - b.x
+                val dy = o.y - b.y
+                val d = kotlin.math.sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
+                val f = clamp01(1f - d / dp(280f))
+                if (f <= 0f) continue
+                o.vx += dx / d * 1500f * f
+                o.vy += dy / d * 1500f * f
+                o.wobV += 2.2f * f
+            }
         } else {
             Hx.fire(this, S.HE_CLOSEALL)
         }
         items.removeAt(i)
         bubs.removeAt(i)
+        if (holdVis == i) {
+            holdVis = -1
+            holdSp.snap(0f)
+        } else if (holdVis > i) holdVis--
+        if (holdIdx == i) holdIdx = -1 else if (holdIdx > i) holdIdx--
         if (grab == i) grab = -1 else if (grab > i) grab--
         if (hitIdx == i) hitIdx = -1 else if (hitIdx > i) hitIdx--
         if (pressIdx == i) pressIdx = -1 else if (pressIdx > i) pressIdx--
@@ -248,7 +338,8 @@ class RecentsView(ctx: Context) : View0(ctx) {
         if (pos.value > maxPos()) pos.to(maxPos())
         ticker.kick()
         invalidate()
-        if (items.isEmpty()) postDelayed({ listener?.onClose() }, 450)
+        // la última: se deja ver el estallido entero antes de cerrar recientes
+        if (items.isEmpty()) postDelayed({ listener?.onClose() }, if (pop) 640L else 300L)
     }
 
     fun setItems(list: List<AppEntry>) {
@@ -370,9 +461,19 @@ class RecentsView(ctx: Context) : View0(ctx) {
                 y = if (b != null && b.placed) b.y else homeY
                 // respiran un poco y la agarrada se levanta
                 val breathe = 1f + 0.018f * sin(floatT * 1.3f + (b?.phase ?: 0f))
-                val s = homeS * breathe * (if (i == grab) grabLift.value else 1f)
-                val q = clamp01(p * 1.5f - i * 0.04f)
-                val ss = s * lerp(0.2f, 1f, q)
+                var s = homeS * breathe * (if (i == grab) grabLift.value else 1f)
+                if (i == holdVis) {
+                    // mantenida: se va hinchando y tiembla cada vez más, avisando de que va a estallar
+                    val k = holdSp.value
+                    s *= 1f + 0.16f * easeOut(k)
+                    val jit = dp(1.6f) * k * k
+                    cx += sin(floatT * 57f) * jit
+                    y += kotlin.math.cos(floatT * 49f) * jit
+                }
+                // entrada: suben desde abajo una tras otra y se inflan con un pequeño rebote
+                val q = clamp01(p * 1.5f - i * 0.05f)
+                y += (1f - q) * (1f - q) * dp(70f)
+                val ss = s * (0.25f + 0.75f * popCurve(q))
                 outA = clamp01(q * 2f)
                 out.set(cx - ss / 2f, y - ss / 2f, cx + ss / 2f, y + ss / 2f)
                 if (i == dismissIdx) applyDismiss(out)
@@ -459,8 +560,30 @@ class RecentsView(ctx: Context) : View0(ctx) {
             if (outRot != 0f) Rot3D.apply(c, outRot, r.centerX(), r.centerY())
             if (i == pressIdx && pressK.value != 1f) c.scale(pressK.value, pressK.value, r.centerX(), r.centerY())
             if (style == 4) {
+                val b = bubs.getOrNull(i)
+                val bx = r.centerX()
+                val by = r.centerY()
+                if (b != null) {
+                    // se estira hacia donde se mueve (más al arrastrarla o lanzarla)
+                    val mvx = if (i == grab) b.gvx else b.vx
+                    val mvy = if (i == grab) b.gvy else b.vy
+                    val st = clamp01(kotlin.math.hypot(mvx, mvy) / 3800f) * 0.16f
+                    if (st > 0.004f) {
+                        val ang = Math.toDegrees(kotlin.math.atan2(mvy, mvx).toDouble()).toFloat()
+                        c.rotate(ang, bx, by)
+                        c.scale(1f + st, 1f - st * 0.7f, bx, by)
+                        c.rotate(-ang, bx, by)
+                    }
+                    val wb = b.wob.coerceIn(-0.14f, 0.14f)
+                    if (abs(wb) > 0.002f) c.scale(1f + wb, 1f - wb, bx, by)
+                }
                 drawBubble(c, r, al)
-                drawIcon(c, e, r.centerX(), r.centerY(), r.width() * 0.62f, al)
+                // el icono se mece un poco dentro de la burbuja
+                val tilt = if (b != null) sin(floatT * 0.6f * b.speed + b.phase) * 3f else 0f
+                c.save()
+                c.rotate(tilt, bx, by)
+                drawIcon(c, e, bx, by, r.width() * 0.62f, al)
+                c.restore()
             } else {
                 drawCard(c, e, r, al)
             }
@@ -496,32 +619,71 @@ class RecentsView(ctx: Context) : View0(ctx) {
         }
     }
 
-    /** estallido: la burbuja se hincha y se desvanece, un anillo se abre y salen gotitas */
+    /**
+     * Estallido, por fases (t de 0 a 1):
+     *  0,00–0,22  la burbuja se hincha un poco más y la piel tiembla;
+     *  0,22       revienta: destello suave y la burbuja desaparece;
+     *  0,22–1,00  un anillo se abre y se afina, las gotas salen despedidas, frenan y caen un poco,
+     *             y el icono se encoge girando mientras se desvanece.
+     */
     private fun drawPops(c: Canvas, a: Float) {
+        val burst = 0.22f
         for (p in pops) {
             val t = clamp01(p.t)
-            val k = 1f - t
             val rad = p.size / 2f
-            // la burbuja se hincha un poco y desaparece
-            if (t < 0.35f) {
-                val q = t / 0.35f
-                val sz = p.size * (1f + 0.25f * q)
+            if (t < burst) {
+                // 1) se hincha (continúa desde lo que se hinchó al mantenerla) y la piel tiembla
+                val q = t / burst
+                val sc = p.start * (1f + 0.12f * easeOut(q))
+                val wob = sin(q * 18f) * 0.03f * q
+                val sz = p.size * sc
                 r2.set(p.x - sz / 2f, p.y - sz / 2f, p.x + sz / 2f, p.y + sz / 2f)
-                drawBubble(c, r2, a * (1f - q))
-                drawIcon(c, p.e, p.x, p.y, sz * 0.62f * (1f - q * 0.6f), a * (1f - q))
+                c.save()
+                c.scale(1f + wob, 1f - wob, p.x, p.y)
+                drawBubble(c, r2, a)
+                drawIcon(c, p.e, p.x, p.y, sz * 0.62f, a)
+                c.restore()
+                continue
             }
-            // anillo que se abre
-            ringPaint.strokeWidth = dp(3f) * k + dp(0.5f)
+            val u = (t - burst) / (1f - burst) // 0 → 1 tras reventar
+            val br = rad * p.start * 1.12f      // radio en el momento de reventar
+            // 2) destello suave justo al reventar
+            if (u < 0.35f) {
+                val f = 1f - u / 0.35f
+                dropPaint.color = Color.WHITE
+                dropPaint.alpha = (120 * a * f * f).toInt().coerceIn(0, 255)
+                c.drawCircle(p.x, p.y, br * (1f + u * 0.5f), dropPaint)
+            }
+            // 3) anillo que se abre rápido y luego frena, cada vez más fino
+            val ring = easeOut(u)
             ringPaint.color = Color.WHITE
-            ringPaint.alpha = (200 * a * k).toInt().coerceIn(0, 255)
-            c.drawCircle(p.x, p.y, rad * (1f + t * 0.9f), ringPaint)
-            // gotitas
+            ringPaint.strokeWidth = dp(3.2f) * (1f - ring) + dp(0.4f)
+            ringPaint.alpha = (210 * a * (1f - u) * (1f - u)).toInt().coerceIn(0, 255)
+            c.drawCircle(p.x, p.y, br * (1f + ring * 0.85f), ringPaint)
+            // 4) gotas: salen despedidas, frenan, caen un poco y se encogen
             dropPaint.color = Color.WHITE
-            dropPaint.alpha = (220 * a * k).toInt().coerceIn(0, 255)
-            for (d in 0 until 8) {
-                val ang = d * 0.7854f + 0.3f
-                val dist = rad * (0.9f + t * 0.9f)
-                c.drawCircle(p.x + kotlin.math.cos(ang) * dist, p.y + sin(ang) * dist, dp(3.2f) * k + dp(0.6f), dropPaint)
+            for (d in 0 until p.n) {
+                val go = easeOut(u) * p.spd[d]
+                val dist = br * (0.95f + go * 1.1f)
+                val fall = u * u * dp(46f) * p.spd[d]
+                val dx = kotlin.math.cos(p.ang[d]) * dist
+                val dy = sin(p.ang[d]) * dist + fall
+                val ds = dp(3.4f) * p.sz[d] * (1f - u * 0.75f)
+                dropPaint.alpha = (230 * a * (1f - u)).toInt().coerceIn(0, 255)
+                c.drawCircle(p.x + dx, p.y + dy, ds, dropPaint)
+                // brillo pequeño en cada gota (parecen de agua)
+                if (ds > dp(1.6f)) {
+                    dropPaint.alpha = (255 * a * (1f - u)).toInt().coerceIn(0, 255)
+                    c.drawCircle(p.x + dx - ds * 0.3f, p.y + dy - ds * 0.3f, ds * 0.35f, dropPaint)
+                }
+            }
+            // 5) el icono se encoge girando y se desvanece
+            if (u < 0.6f) {
+                val k = u / 0.6f
+                c.save()
+                c.rotate(k * 40f, p.x, p.y)
+                drawIcon(c, p.e, p.x, p.y, p.size * 0.62f * p.start * (1f - easeOut(k) * 0.85f), a * (1f - k))
+                c.restore()
             }
         }
     }
@@ -619,8 +781,14 @@ class RecentsView(ctx: Context) : View0(ctx) {
                     Mo.tune(pressK, S.MO_PRESS, 600f, 1f)
                     pressK.to(0.96f)
                     ticker.kick()
-                    // burbujas: mantener pulsada la hace estallar (la quita de recientes)
-                    if (style == 4) postDelayed(bubbleLong, S.f(S.G_LONG_MS).toLong())
+                    // burbujas: mantener pulsada la hace estallar (la quita de recientes); mientras, se hincha
+                    if (style == 4) {
+                        postDelayed(bubbleLong, S.f(S.G_LONG_MS).toLong())
+                        holdIdx = hitIdx
+                        holdVis = hitIdx
+                        holdStart = android.os.SystemClock.uptimeMillis()
+                        holdSp.snap(0f)
+                    }
                 }
                 return true
             }
@@ -632,6 +800,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
                 if (style == 4 && mode == 0 && hitIdx in bubs.indices && (abs(dx) > slop || abs(dy) > slop)) {
                     // agarrar la burbuja: se levanta y sigue al dedo
                     removeCallbacks(bubbleLong)
+                    endHold()
                     releasePress()
                     mode = 5
                     grab = hitIdx
@@ -643,6 +812,12 @@ class RecentsView(ctx: Context) : View0(ctx) {
                         b.placed = true
                     }
                     b.flying = false
+                    b.lastX = b.x
+                    b.lastY = b.y
+                    b.gvx = 0f
+                    b.gvy = 0f
+                    // al levantarla se aplasta un instante, como al pellizcar una gota
+                    b.wobV -= 1.4f
                     grabDX = downX - b.x
                     grabDY = downY - b.y
                     Mo.tune(grabLift, S.MO_PRESS, 420f, 0.55f)
@@ -665,6 +840,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
                 }
                 if (mode == 0 && (abs(dx) > slop || abs(dy) > slop)) {
                     removeCallbacks(bubbleLong)
+                    endHold()
                     releasePress()
                     mode = if (S.b(S.RC_SWIPE) && hitIdx >= 0 && dy < 0 && abs(dy) > abs(dx) * 1.2f && style != 4) 2 else 1
                     if (mode == 2) {
@@ -700,6 +876,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
                 val vy = vt?.yVelocity ?: 0f
                 val up = ev.actionMasked == MotionEvent.ACTION_UP
                 removeCallbacks(bubbleLong)
+                if (!longFired) endHold()
                 releasePress()
                 if (longFired) {
                     // la burbuja ya estalló con la pulsación larga
@@ -723,10 +900,13 @@ class RecentsView(ctx: Context) : View0(ctx) {
                                 b.pinned = true
                                 b.ax = b.x
                                 b.ay = b.y
-                                // conserva un poco de la inercia del dedo y se asienta con rebote
+                                // conserva un poco de la inercia del dedo y se asienta temblando como gelatina
                                 b.vx = vx * 0.35f
                                 b.vy = vy * 0.35f
+                                b.wobV += 2.4f
                             }
+                            b.gvx = 0f
+                            b.gvy = 0f
                         }
                         grab = -1
                         Mo.tune(grabLift, S.MO_RELEASE, 380f, 0.45f)
