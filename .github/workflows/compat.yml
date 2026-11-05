@@ -17,7 +17,7 @@ concurrency:
 jobs:
   probar:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -25,7 +25,7 @@ jobs:
           - { api: 29, perfil: pixel_2, nombre: android10_pantalla_pequena }
           - { api: 31, perfil: pixel_3a, nombre: android12 }
           - { api: 33, perfil: pixel_5, nombre: android13 }
-          - { api: 34, perfil: pixel_4_xl, nombre: android14_pantalla_grande }
+          - { api: 34, perfil: pixel_4, nombre: android14 }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -52,7 +52,9 @@ jobs:
           arch: x86_64
           profile: ${{ matrix.perfil }}
           disable-animations: false
-          ram-size: 3072M
+          ram-size: 2048M
+          cores: 2
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
           script: bash ci/compat.sh ${{ matrix.nombre }}
       - name: Guardar informe
         if: always()

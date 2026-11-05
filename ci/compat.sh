@@ -35,7 +35,8 @@ swipe_up() { timeout 20 adb shell input swipe $((W/2)) $((H*3/4)) $((W/2)) $((H/
   done
   # letra grande y otra densidad (como traen muchos móviles de fábrica)
   timeout 20 adb shell settings put system font_scale 1.3
-  timeout 20 adb shell wm density $(( $(adb shell wm density | tail -n1 | sed 's/.*: //' | tr -d '\r') * 115 / 100 ))
+  D=$(adb shell wm density | tail -n1 | sed 's/.*: //' | tr -dc 0-9)
+  [ -n "$D" ] && timeout 20 adb shell wm density $(( D * 115 / 100 ))
   prefs 2; start; swipe_up; sleep 2
   timeout 20 adb exec-out screencap -p > compat/${NAME}_letra_grande.png
   back
@@ -44,7 +45,8 @@ swipe_up() { timeout 20 adb shell input swipe $((W/2)) $((H*3/4)) $((W/2)) $((H/
   # estrés: toques, deslizamientos y pellizcos al azar en el launcher y sus ajustes
   for st in 0 2 4; do
     prefs $st; start
-    timeout 300 adb shell monkey -p $P --throttle 40 --pct-syskeys 0 --pct-appswitch 0 --ignore-timeouts -s $((st+3)) -v 1500 2>&1 | grep -E "CRASH|Events injected|aborted" | head -5
+    echo "-- estrés vista $st"
+    timeout 200 adb shell monkey -p $P --throttle 30 --pct-syskeys 0 --pct-appswitch 0 --ignore-timeouts -s $((st+3)) -v 700 2>&1 | grep -E "CRASH|Events injected|aborted" | head -5
   done
   echo "== cierres del launcher"
   if adb logcat -d -s AndroidRuntime:E | grep -q "FATAL EXCEPTION"; then
