@@ -265,11 +265,14 @@ class MainActivity : Activity() {
         home.setDrawerProgress(p)
         val blurOn = Prefs.blur && !Prefs.saver && !CrashGuard.safeMode
         if (p > 0.001f) {
-            if (blurOn && !backdrop.tried) backdrop.capture(home)
-            backdrop.progress = p
             // vistas a pantalla completa: el inicio se desvanece casi del todo para que sus iconos
             // no se mezclen con los del cajón mientras sube con el dedo (rejilla y abanico lo dejan ver)
-            val keep = if (recentsP > drawerP || Prefs.drawerStyle == 1 || Prefs.drawerStyle == 2) 0.35f else 0.85f
+            val see = recentsP > drawerP || Prefs.drawerStyle == 1 || Prefs.drawerStyle == 2
+            val keep = if (see) 0.35f else 0.85f
+            // a pantalla completa y con el desenfoque del sistema (Android 12+) sobra la foto difuminada
+            // del inicio: hacerla dibuja todo el inicio en la CPU en el primer fotograma (tirón al abrir)
+            if (blurOn && !backdrop.tried && (see || !systemBlur())) backdrop.capture(home)
+            backdrop.progress = p
             home.alpha = if (backdrop.hasSnapshot) 1f - p else 1f - keep * p
         } else {
             backdrop.release()
@@ -277,6 +280,9 @@ class MainActivity : Activity() {
         }
         wallpaperBlur(if (blurOn) p else 0f)
     }
+
+    private fun systemBlur(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+        try { windowManager.isCrossWindowBlurEnabled } catch (t: Throwable) { false }
 
     /** Android 12+: el sistema difumina el fondo de pantalla detrás del launcher (lo hace la GPU del compositor). */
     private fun wallpaperBlur(p: Float) {

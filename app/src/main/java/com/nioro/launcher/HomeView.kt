@@ -443,11 +443,20 @@ class HomeView(ctx: Context) : View(ctx) {
         invalidate()
     }
 
-    fun setDrawerProgress(p: Float) {
-        if (abs(p - drawerP) > 0.0005f) {
-            drawerP = p
-            invalidate()
-        }
+    fun setDrawerProgress(p0: Float) {
+        val p = if (p0 < 0.001f) 0f else p0
+        if (abs(p - drawerP) < 0.0005f && (p == 0f) == (drawerP == 0f)) return
+        drawerP = p
+        // El inicio se encoge y se desvanece como una sola "foto" en la GPU (capa de hardware):
+        // así no se vuelve a dibujar entero (reloj, sombras de texto, cristal) en cada fotograma
+        // mientras se abre la vista de apps. Antes eso hacía la apertura lenta y a tirones.
+        val s = 1f - S.p(S.H_SCALE_PANEL) * p
+        pivotX = width / 2f
+        pivotY = height / 2f
+        scaleX = s
+        scaleY = s
+        val want = if (p > 0f) LAYER_TYPE_HARDWARE else LAYER_TYPE_NONE
+        if (layerType != want) setLayerType(want, null)
     }
 
     fun setRunning(set: Set<String>) {
@@ -1033,10 +1042,6 @@ class HomeView(ctx: Context) : View(ctx) {
     override fun onDraw(c: Canvas) {
         drawBackdrop(c)
         c.save()
-        if (drawerP > 0.001f) {
-            val s = 1f - S.p(S.H_SCALE_PANEL) * drawerP
-            c.scale(s, s, width / 2f, height / 2f)
-        }
         val enterOn = enterSp.value < 0.9995f || enterSp.active
         val ed = editSp.value
         if (ed > 0.001f) {
