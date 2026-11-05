@@ -8,7 +8,6 @@ import android.graphics.RectF
 import kotlin.math.PI
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /**
@@ -244,12 +243,77 @@ class DockArt {
         }
     }
 
-    /** cristal propio bajo un icono (formas Burbujas y Baldosas) */
-    fun drawTile(c: Canvas, form: Int, cx: Float, cy: Float, size: Float, a: Float, m: GlassMat) {
+    // ---- cristal por icono guardado en la GPU: se dibuja una vez y luego solo se escala y se mueve
+    private val tileNode = android.graphics.RenderNode("tile")
+    private var tileKey = 0L
+    private var tileSize = 0f
+    private var tileW = 0
+
+    /** huella del material: si cambia, la burbuja guardada se vuelve a dibujar */
+    private fun matKey(form: Int, m: GlassMat): Long {
+        var h = form.toLong()
+        h = h * 31 + m.tint
+        h = h * 31 + (m.tintOp * 100).toInt()
+        h = h * 31 + (m.intensity * 100).toInt()
+        h = h * 31 + (m.radius * 100).toInt()
+        h = h * 31 + (m.rimW * 100).toInt()
+        h = h * 31 + (m.rimB * 100).toInt()
+        h = h * 31 + m.rimColor
+        h = h * 31 + (m.lens * 100).toInt()
+        h = h * 31 + (m.lensH * 100).toInt()
+        h = h * 31 + (m.caustic * 100).toInt()
+        h = h * 31 + (m.inner * 100).toInt()
+        h = h * 31 + (if (m.shadow) 1 else 0)
+        h = h * 31 + (m.shadowS * 100).toInt()
+        h = h * 31 + (m.shadowY * 100).toInt()
+        h = h * 31 + (m.alpha * 100).toInt()
+        h = h * 31 + (if (m.grad) m.tint2 else 0)
+        h = h * 31 + Prefs.glass
+        h = h * 31 + S.i(S.P_SHADOWS) + (if (Prefs.saver) 7 else 0)
+        return h
+    }
+
+    /** dibuja el cristal de un icono tal cual (centrado en cx, cy) */
+    private fun tileRaw(c: Canvas, form: Int, cx: Float, cy: Float, size: Float, a: Float, m: GlassMat) {
         val half = size * 0.6f
         tile.set(cx - half, cy - half, cx + half, cy + half)
         val rad = if (form == DockDesigns.F_BUBBLES) half else half * 0.46f
         glass.drawMat(c, tile, rad, a, true, m, null)
+    }
+
+    /**
+     * Cristal propio bajo un icono (formas Burbujas y Baldosas). Antes cada burbuja se redibujaba entera
+     * en cada fotograma de la magnificación (~8 formas × 7 iconos): tirones. Ahora se graba una vez al
+     * tamaño máximo de la magnificación y la GPU solo la escala y la coloca (las burbujas son iguales).
+     */
+    fun drawTile(c: Canvas, form: Int, cx: Float, cy: Float, size: Float, a: Float, m: GlassMat) {
+        if (!c.isHardwareAccelerated || size < 1f) {
+            tileRaw(c, form, cx, cy, size, a, m)
+            return
+        }
+        val key = matKey(form, m)
+        if (key != tileKey || size > tileSize * 1.01f || !tileNode.hasDisplayList()) {
+            // se graba algo más grande que lo pedido: así el icono puede crecer sin volver a grabar
+            val ref = max(size, tileSize) * (if (key != tileKey) max(1f, S.p(S.K_MAX_SCALE)) else 1.15f)
+            tileKey = key
+            tileSize = ref
+            val pad = dp(16f) // la sombra sobresale por abajo
+            val half = ref * 0.6f
+            tileW = (2f * (half + pad)).toInt() + 2
+            tileNode.setPosition(0, 0, tileW, tileW)
+            tileNode.setUseCompositingLayer(true, null)
+            val rc = tileNode.beginRecording()
+            tileRaw(rc, form, tileW / 2f, tileW / 2f, ref, 1f, m)
+            tileNode.endRecording()
+        }
+        val k = size / tileSize
+        tileNode.setAlpha(clamp01(a))
+        c.save()
+        c.translate(cx, cy)
+        c.scale(k, k)
+        c.translate(-tileW / 2f, -tileW / 2f)
+        c.drawRenderNode(tileNode)
+        c.restore()
     }
 
     /** Línea de luz: una raya brillante bajo los iconos con un halo suave alrededor */
@@ -298,7 +362,10 @@ class DockArt {
         val b = r.bottom
         val rad = min(h * 0.44f, r.height() / 2f)
         val span = r.width() - rad * 2f
-        val waves = max(2, (span / (h * 1.1f)).roundToInt())
+        // ondas de tamaño fijo contadas desde el centro: al ensancharse el dock (magnificación) aparecen
+        // poco a poco por los lados en vez de cambiar de número de golpe; se apagan hacia los extremos
+        val lambda = h * 1.1f
+        val cx = r.centerX()
         val amp = h * 0.07f
         path.reset()
         path.moveTo(l + rad, b)
@@ -308,7 +375,9 @@ class DockArt {
         val steps = 48
         for (i in 1..steps) {
             val f = i / steps.toFloat()
-            path.lineTo(l + rad + span * f, t - amp * sin(f * waves * 2f * PI.toFloat()))
+            val x = l + rad + span * f
+            val env = sin(f * PI.toFloat())
+            path.lineTo(x, t - amp * env * kotlin.math.cos((x - cx) / lambda * 2f * PI.toFloat()))
         }
         path.arcTo(rt - rad * 2f, t, rt, t + rad * 2f, 270f, 90f, false)
         path.lineTo(rt, b - rad)
