@@ -265,9 +265,32 @@ object AppRepo {
             d.draw(cf)
         }
         val fp = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-        val sc = 0.94f
-        val off = s * (1f - sc) / 2f
-        c.drawBitmap(fg, null, RectF(off, off, s - off, s - off), fp)
+        // cuánto del cuadrado tapa el dibujo de delante:
+        //  - casi nada: la app guarda su dibujo en la capa de fondo (p. ej. Brother) → antes salía vacío;
+        //  - casi todo: el dibujo ocupa todo el cuadrado (AliExpress, Canon...) → antes asomaba por las esquinas.
+        // En esos dos casos se usa el icono completo (fondo + dibujo) dentro del cristal.
+        val cover = coverage(fg)
+        val src = if (cover < 0.04f || cover > 0.78f) full else fg
+        // siempre recortado a la forma del cristal (un poco hacia dentro, para no pisar el borde)
+        val clip = squirclePath(s * 0.92f)
+        clip.offset(s * 0.04f, s * 0.04f)
+        c.save()
+        c.clipPath(clip)
+        if (src === full) {
+            // icono completo: llena el cristal y se le deja un velo del tinte para que siga pareciendo cristal
+            c.drawBitmap(full, null, RectF(0f, 0f, s, s), fp)
+            val veil = Paint(Paint.ANTI_ALIAS_FLAG)
+            veil.color = blend(tint, 0xFF0B1430.toInt(), 0.55f)
+            veil.alpha = 46
+            c.drawPath(path, veil)
+        } else {
+            val sc = 0.94f
+            val off = s * (1f - sc) / 2f
+            c.drawBitmap(fg, null, RectF(off, off, s - off, s - off), fp)
+        }
+        c.restore()
+        // brillo de cristal también por encima del dibujo
+        c.drawPath(path, lens)
         fg.recycle()
         full.recycle()
         val rim = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -331,6 +354,22 @@ object AppRepo {
         val ch = label.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?"
         c.drawText(ch, size / 2f, size / 2f - (t.descent() + t.ascent()) / 2f, t)
         return bake(b, shape)
+    }
+
+    /** fracción (0..1) del cuadrado que tapa el dibujo (píxeles bastante opacos), muestreada en 24×24 */
+    private fun coverage(b: Bitmap): Float {
+        return try {
+            val n = 24
+            val s = Bitmap.createScaledBitmap(b, n, n, true)
+            val px = IntArray(n * n)
+            s.getPixels(px, 0, n, 0, 0, n, n)
+            if (s !== b) s.recycle()
+            var on = 0
+            for (p in px) if ((p ushr 24) > 60) on++
+            on / (n * n).toFloat()
+        } catch (t: Throwable) {
+            0.5f
+        }
     }
 
     private fun average(b: Bitmap): Int {

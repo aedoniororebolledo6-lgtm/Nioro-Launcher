@@ -494,7 +494,11 @@ class SettingsActivity : Activity() {
                 val k2 = card(c, dp(6f).toInt())
                 val has = Recents.hasUsageAccess(this)
                 button(k2, "Acceso de uso", if (has) "Activado · ves todas tus apps recientes" else "Desactivado · tócalo para activarlo", Glyphs.RECENTS) {
-                    tryStart(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                    tryStartAny(
+                        Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS, Uri.parse("package:$packageName")),
+                        Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS),
+                        Intent(Settings.ACTION_SECURITY_SETTINGS)
+                    )
                 }
             }
             PAGE_LOOK -> {
@@ -946,7 +950,12 @@ class SettingsActivity : Activity() {
             }
         } catch (t: Throwable) {
         }
-        tryStart(Intent(Settings.ACTION_HOME_SETTINGS))
+        // cada marca guarda esta opción en un sitio: se prueba de la más directa a la más general
+        tryStartAny(
+            Intent(Settings.ACTION_HOME_SETTINGS),
+            Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS),
+            Intent(Settings.ACTION_SETTINGS)
+        )
     }
 
     // ---------------------------------------------------------------- Componentes
@@ -967,6 +976,18 @@ class SettingsActivity : Activity() {
     }
 
     private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_SHORT).show()
+
+    /** abre la primera pantalla que exista en este móvil (Samsung, Xiaomi, Huawei, Oppo... no tienen las mismas) */
+    private fun tryStartAny(vararg list: Intent) {
+        for (i in list) {
+            try {
+                startActivity(i)
+                return
+            } catch (t: Throwable) {
+            }
+        }
+        toast("No disponible en este móvil")
+    }
 
     private fun tryStart(i: Intent) {
         try {

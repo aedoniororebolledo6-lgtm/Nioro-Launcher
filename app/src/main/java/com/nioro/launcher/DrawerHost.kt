@@ -145,9 +145,8 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
         if (up) islandIme = px
         val t = if (up) 1f else 0f
         if (islandSp.target != t) {
-            // baja (o sube) con rebote, como una gota
-            // como una gota de agua: cae más despacio, y al llegar salpica y se asienta
-            if (up) Mo.tune(islandSp, S.MO_MENU, 135f, 0.48f) else Mo.tune(islandSp, S.MO_MENU, 160f, 0.78f)
+            // gota de agua: sin rebote y despacio (amortiguación crítica); la forma la da placeIsland()
+            islandSp.tune(60f * S.p(S.mp(S.MO_MENU, S.MP_SPEED)), 1f)
             islandSp.to(t)
             ticker.kick()
         }
@@ -166,15 +165,42 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
         val q = islandSp.value
         val restTop = insetTop + dp(16f)
         val islandTop = height - islandIme - dp(12f) - ISLAND_H
-        search.translationY = (1f - a) * -dp(30f) + (islandTop - restTop) * q
-        // gota de agua: mientras cae se alarga y se afina según su velocidad; al llegar (cuando el
-        // resorte se pasa un poco) se aplasta a lo ancho como una gota que choca, y se asienta
+        // Gota de agua en tres tiempos (q va de 0 a 1, y al revés al cerrar el teclado):
+        //  1) la barra se recoge en una gota redonda,  2) la gota viaja hasta encima del teclado
+        //     alargándose un poco mientras se mueve,  3) al llegar se extiende hasta su tamaño.
+        val t = clamp01(q)
+        val gather = smooth(t / 0.28f)                 // 0 → 1: recogerse
+        val travel = smooth((t - 0.2f) / 0.58f)        // 0 → 1: viajar
+        val spread = smooth((t - 0.72f) / 0.28f)       // 0 → 1: extenderse al llegar
+        val bw = search.width.toFloat().coerceAtLeast(1f)
+        val dropW = (ISLAND_H * 1.05f / bw).coerceAtMost(1f)
+        // ancho: entero → gota → (en el sitio) un poco más estrecho que arriba, como isla
+        val wf = lerp(lerp(1f, dropW, gather), 0.92f, spread)
+        val moving = 4f * travel * (1f - travel)       // 0 en los extremos, 1 a mitad del viaje
         val enter = lerp(0.9f, 1f, a)
-        val stretch = clamp01(kotlin.math.abs(islandSp.velocity) * 0.075f) * 0.26f
-        val splash = kotlin.math.max(0f, q - 1f)
-        search.scaleX = enter * lerp(1f, 0.92f, clamp01(q)) * (1f - stretch * 0.5f + splash * 1.5f)
-        search.scaleY = enter * (1f + stretch - splash * 1.3f)
-        search.translationZ = dp(6f) * clamp01(q)
+        search.translationY = (1f - a) * -dp(30f) + (islandTop - restTop) * travel
+        search.scaleX = enter * wf
+        search.scaleY = enter * (1f + 0.22f * moving) * lerp(1f, 0.94f, gather * (1f - spread))
+        search.translationZ = dp(6f) * t
+        // el texto y los iconos de la barra se esconden mientras es gota y vuelven al extenderse
+        val content = clamp01(1f - gather * (1f - spread) * 1.6f)
+        setSearchContentAlpha(content)
+    }
+
+    private fun smooth(x: Float): Float {
+        val v = clamp01(x)
+        return v * v * (3f - 2f * v)
+    }
+
+    private var contentA = -1
+    private fun setSearchContentAlpha(f: Float) {
+        val al = (255 * clamp01(f)).toInt()
+        if (al == contentA) return
+        contentA = al
+        search.setHintTextColor((0xB3 * al / 255) shl 24 or 0xFFFFFF)
+        val tc = S.col(S.tp(S.TX_SEARCH, S.TP_COLOR), Color.WHITE)
+        search.setTextColor((((tc ushr 24) * al) / 255) shl 24 or (tc and 0xFFFFFF))
+        for (d in search.compoundDrawablesRelative) d?.alpha = al
     }
 
     fun setInsets(top: Float, bottom: Float) {
@@ -319,6 +345,7 @@ class DrawerHost(ctx: Context) : FrameLayout(ctx) {
             search.visibility = if (S.b(S.DR_SEARCH)) View.VISIBLE else View.GONE
             search.textSize = 16f * S.p(S.tp(S.TX_SEARCH, S.TP_SIZE))
             search.setTextColor(S.col(S.tp(S.TX_SEARCH, S.TP_COLOR), Color.WHITE))
+            contentA = -1
             search.background = GlassDrawable(22f, 1f, S.SF_SEARCH)
             rebuildScrim()
             Hx.fire(this, S.HE_PANEL)
