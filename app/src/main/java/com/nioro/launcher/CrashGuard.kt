@@ -54,10 +54,13 @@ object CrashGuard {
         File(d, TIMES).writeText(keep.takeLast(8).joinToString("\n"))
     }
 
-    private fun times(): List<Long> = try {
-        File(dir ?: return emptyList(), TIMES).readLines().mapNotNull { it.trim().toLongOrNull() }
-    } catch (_: Throwable) {
-        emptyList()
+    private fun times(): List<Long> {
+        val d = dir ?: return emptyList()
+        return try {
+            File(d, TIMES).readLines().mapNotNull { it.trim().toLongOrNull() }
+        } catch (_: Throwable) {
+            emptyList()
+        }
     }
 
     /** cierres en los últimos 3 minutos */
@@ -75,11 +78,14 @@ object CrashGuard {
         safeMode = false
     }
 
-    fun lastError(): String? = try {
-        val f = File(dir ?: return null, LOG)
-        if (f.exists()) f.readText() else null
-    } catch (_: Throwable) {
-        null
+    fun lastError(): String? {
+        val d = dir ?: return null
+        return try {
+            val f = File(d, LOG)
+            if (f.exists()) f.readText() else null
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     fun clear() {
