@@ -77,7 +77,8 @@ class RecentsView(ctx: Context) : View0(ctx) {
     }
 
     // ---------------- Burbujas: cada una flota, se agarra con el dedo y estalla al mantenerla ----------------
-    private class Bub(val key: String) {
+    /** [slot] = su sitio fijo en la espiral: al quitar otra burbuja, las demás no cambian de sitio */
+    private class Bub(val key: String, val slot: Int) {
         var x = 0f
         var y = 0f
         var vx = 0f
@@ -182,11 +183,13 @@ class RecentsView(ctx: Context) : View0(ctx) {
         val w = width.toFloat()
         val h = height.toFloat()
         val cy = (insetTop + h - insetBottom) / 2f - dp(10f)
-        val ang = i * 2.39996f + pos.value * 0.6f
-        val rad = dp(46f) + sqrtI(i) * dp(58f)
+        // su sitio de siempre (no el puesto en la lista): si estalla otra, esta no se mueve
+        val sl = bubs.getOrNull(i)?.slot ?: i
+        val ang = sl * 2.39996f + pos.value * 0.6f
+        val rad = dp(46f) + sqrtI(sl) * dp(58f)
         homeX = w / 2f + kotlin.math.cos(ang) * rad
         homeY = cy + sin(ang) * rad * 1.1f
-        homeS = dp(84f) * (1f - min(0.45f, i * 0.03f))
+        homeS = dp(84f) * (1f - min(0.45f, sl * 0.03f))
     }
 
     /** un paso de la física de las burbujas: resorte hacia su sitio + flotación + empujarse entre ellas */
@@ -194,7 +197,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
         val w = width.toFloat()
         val h = height.toFloat()
         val dt = min(dt0, 0.033f) / 2f
-        val fa = dp(7f)
+        val fa = dp(9f)
         // la agarrada: velocidad del dedo suavizada (para estirarla hacia donde va)
         bubs.getOrNull(grab)?.let { g ->
             val inv = 1f / max(0.004f, dt0)
@@ -224,8 +227,8 @@ class RecentsView(ctx: Context) : View0(ctx) {
                     b.vy *= 1f - 0.4f * dt
                 } else {
                     // flotar: cada burbuja se mece a su ritmo alrededor de su sitio
-                    val tx = (if (b.pinned) b.ax else homeX) + sin(floatT * 0.9f * b.speed + b.phase) * fa
-                    val ty = (if (b.pinned) b.ay else homeY) + kotlin.math.cos(floatT * 0.7f * b.speed + b.phase * 1.3f) * fa * 1.3f
+                    val tx = (if (b.pinned) b.ax else homeX) + sin(floatT * 1.05f * b.speed + b.phase) * fa
+                    val ty = (if (b.pinned) b.ay else homeY) + kotlin.math.cos(floatT * 0.85f * b.speed + b.phase * 1.3f) * fa * 1.3f
                     b.vx += ((tx - b.x) * 26f - b.vx * 7.5f) * dt
                     b.vy += ((ty - b.y) * 26f - b.vy * 7.5f) * dt
                 }
@@ -315,10 +318,10 @@ class RecentsView(ctx: Context) : View0(ctx) {
                 val dx = o.x - b.x
                 val dy = o.y - b.y
                 val d = kotlin.math.sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
-                val f = clamp01(1f - d / dp(280f))
+                val f = clamp01(1f - d / dp(240f))
                 if (f <= 0f) continue
-                o.vx += dx / d * 1500f * f
-                o.vy += dy / d * 1500f * f
+                o.vx += dx / d * 1000f * f
+                o.vy += dy / d * 1000f * f
                 o.wobV += 2.2f * f
             }
         } else {
@@ -335,7 +338,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
         if (hitIdx == i) hitIdx = -1 else if (hitIdx > i) hitIdx--
         if (pressIdx == i) pressIdx = -1 else if (pressIdx > i) pressIdx--
         Recents.forget(e.key)
-        if (pos.value > maxPos()) pos.to(maxPos())
+        // (el giro de la espiral no se toca: así ninguna otra burbuja se mueve de su sitio)
         ticker.kick()
         invalidate()
         // la última: se deja ver el estallido entero antes de cerrar recientes
@@ -346,7 +349,7 @@ class RecentsView(ctx: Context) : View0(ctx) {
         items = ArrayList(list)
         style = Prefs.recentsAnim
         bubs.clear()
-        for (e in items) bubs.add(Bub(e.key))
+        for ((k, e) in items.withIndex()) bubs.add(Bub(e.key, k))
         pops.clear()
         grab = -1
         floatT = 0f
