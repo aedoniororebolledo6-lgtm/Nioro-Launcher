@@ -33,4 +33,12 @@ xml = ["<?xml version='1.0' encoding='utf-8' standalone='yes' ?>", "<map>",
        '    <string name="knownKeys">%s</string>' % nl.join(escape(k) for k in keys),
        "</map>", ""]
 open(out, "w", encoding="utf-8").write("\n".join(xml))
+# ajustes del motor S (archivo nioro_s.xml): SVALS="home.layout=1,dock.shape=5" (opcional)
+sv = os.environ.get("SVALS", "").strip()
+sx = ["<?xml version='1.0' encoding='utf-8' standalone='yes' ?>", "<map>"]
+for kv in [x for x in sv.split(",") if "=" in x]:
+    k, v = kv.split("=", 1)
+    sx.append('    <float name="%s" value="%s" />' % (escape(k.strip()), float(v)))
+sx += ["</map>", ""]
+open(out.replace(".xml", "_s.xml"), "w", encoding="utf-8").write("\n".join(sx))
 print("apps:", len(keys), "inicio:", len(home), "dock:", len(dock))

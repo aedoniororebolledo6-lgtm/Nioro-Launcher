@@ -13,6 +13,8 @@ prefs() {
   python3 ci/mkprefs.py acts.txt "$1" prefs.xml $2
   timeout 30 adb push prefs.xml /data/local/tmp/nl.xml > /dev/null 2>&1
   timeout 30 adb shell "chmod 644 /data/local/tmp/nl.xml; run-as $P mkdir -p shared_prefs; run-as $P cp /data/local/tmp/nl.xml shared_prefs/nioro_launcher.xml"
+  timeout 30 adb push prefs_s.xml /data/local/tmp/nls.xml > /dev/null 2>&1
+  timeout 30 adb shell "chmod 644 /data/local/tmp/nls.xml; run-as $P cp /data/local/tmp/nls.xml shared_prefs/nioro_s.xml"
 }
 start() { timeout 60 adb shell am start -W -n $P/.MainActivity > /dev/null 2>&1; sleep 8; }
 back() { timeout 20 adb shell input keyevent 4; sleep 2; }
@@ -68,6 +70,25 @@ hold() { timeout 20 adb shell input swipe "$1" "$2" "$1" "$2" 1300; }
   timeout 20 adb shell input swipe 540 1700 540 1000 3000 &
   SW=$!; sleep 1.8; timeout 20 adb exec-out screencap -p > shots/12_cajon_a_mitad.png; echo "captura 12_cajon_a_mitad"
   wait $SW; sleep 2; back
+  # 10) estilos de organización del inicio y diseños del dock (ajustes del motor S)
+  SVALS="home.layout=1" prefs 0; start; shot 20_org_panal 2
+  SVALS="home.layout=2" prefs 0; start; shot 21_org_sonrisa 2
+  SVALS="home.layout=5" prefs 0; start; shot 22_org_dividida 2
+  SVALS="home.layout=4,dock.shape=5,dock.reflect=1" prefs 0; start; shot 23_pulgar_estante 2
+  SVALS="dock.shape=7" prefs 0; start; shot 24_dock_burbujas 2
+  SVALS="dock.shape=11,glass.0.tint=3,glass.0.tintop=90" prefs 0; start; shot 25_dock_ola 2
+  SVALS="dock.shape=6,glass.0.tint=2,glass.0.tintop=170" prefs 0; start; shot 26_dock_pestana 2
+  SVALS="dock.shape=9,glass.0.rimc=4" prefs 0; start; shot 27_dock_linea 2
+  SVALS="dock.shape=12" prefs 0; start; shot 28_dock_cupula 2
+  # Ajustes: portada y galería de diseños del dock
+  prefs 0; timeout 60 adb shell am start -W -n $P/.SettingsActivity > /dev/null 2>&1; sleep 5; shot 30_ajustes 1
+  timeout 20 adb shell input swipe 540 1800 540 600 400; sleep 2; shot 31_ajustes_abajo 1
+  timeout 60 adb shell am start -S -W -n $P/.SettingsActivity --ei page 1 > /dev/null 2>&1; sleep 6; shot 32_ajustes_dock 1
+  timeout 20 adb shell input swipe 540 1800 540 500 500; sleep 2; shot 33_galeria_dock 1
+  timeout 20 adb shell input swipe 540 1800 540 500 500; sleep 2; shot 34_galeria_dock2 1
+  timeout 60 adb shell am start -S -W -n $P/.SettingsActivity --ei page 0 > /dev/null 2>&1; sleep 6
+  timeout 20 adb shell input swipe 540 1700 540 900 400; sleep 2; shot 35_ajustes_inicio 1
+  back; back
   # 5) menú contextual de un icono del inicio (mantener pulsado el primero)
   prefs 0; start; hold 135 700; shot 09_menu_icono; back
   # 8) botón Launchpad del dock: vídeo de la apertura y fluidez medida por el sistema
