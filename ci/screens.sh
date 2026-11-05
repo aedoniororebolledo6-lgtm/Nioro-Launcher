@@ -77,12 +77,23 @@ hold() { timeout 20 adb shell input swipe "$1" "$2" "$1" "$2" 1300; }
   for k in 1 2 3 4 5; do timeout 20 adb shell input tap 136 2070; sleep 1.5; back; sleep 1; done
   echo "== fluidez al abrir con el botón (5 veces)"
   timeout 20 adb shell dumpsys gfxinfo $P | grep -E "Total frames|Janky|percentile|Slow|Missed|High input|Frame deadline" | head -20
-  # 9) prueba de estrés: miles de toques al azar en el launcher y sus ajustes, para cazar cierres
-  for st in 0 2 4; do
+  # 9) prueba de estrés: miles de toques al azar en el launcher y sus ajustes, para cazar cierres y bloqueos
+  timeout 30 adb root > /dev/null 2>&1; sleep 3
+  for st in 4 0 2; do
     prefs $st; start
+    timeout 20 adb shell "rm -f /data/anr/*" > /dev/null 2>&1
+    adb logcat -c
     echo "== estrés (vista $st)"
-    timeout 300 adb shell monkey -p $P --throttle 25 --pct-syskeys 0 --pct-appswitch 0 -s $((st+7)) -v 4000 2>&1 | grep -E "CRASH|Exception|ANR|Events injected|Monkey finished|aborted" | head -20
-    timeout 20 adb shell "run-as $P cat files/ultimo_error.txt" 2>/dev/null | head -60
+    timeout 420 adb shell monkey -p $P --throttle 40 --pct-syskeys 0 --pct-appswitch 0 --ignore-timeouts --ignore-crashes -s $((st+7)) -v 3000 2>&1 | grep -E "CRASH|ANR in|Events injected|Monkey finished|aborted" | head -10
+    echo "-- cierres de Nioro"
+    adb logcat -d -s AndroidRuntime:E | grep -A40 "FATAL EXCEPTION" | head -80
+    echo "-- bloqueos de Nioro (hilo principal)"
+    for f in $(timeout 20 adb shell "ls /data/anr/" 2>/dev/null | tr -d '\r'); do
+      timeout 20 adb shell "cat /data/anr/$f" 2>/dev/null | grep -q "com.nioro.launcher" || continue
+      echo "[$f]"
+      timeout 20 adb shell "cat /data/anr/$f" | awk '/^"main"/{p=1} p{print; n++} n>45{exit}'
+    done
+    timeout 20 adb shell "run-as $P cat files/ultimo_error.txt" 2>/dev/null | head -40
   done
   echo "== errores graves"
   adb logcat -d -b crash | tail -n 80
