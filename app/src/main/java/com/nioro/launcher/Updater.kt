@@ -92,11 +92,19 @@ object Updater {
         val app = ctx.applicationContext
         if (Build.VERSION.SDK_INT >= 26 && !app.packageManager.canRequestPackageInstalls()) {
             // hay que permitir "Instalar apps desconocidas" una sola vez
-            try {
-                val i = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + app.packageName))
-                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                app.startActivity(i)
-            } catch (t: Throwable) {
+            // con el nombre de la app; si la marca no lo admite, la lista general; si no, la seguridad
+            val tries = listOf(
+                Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:" + app.packageName)),
+                Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES),
+                Intent(Settings.ACTION_SECURITY_SETTINGS)
+            )
+            for (i in tries) {
+                try {
+                    i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    app.startActivity(i)
+                    break
+                } catch (t: Throwable) {
+                }
             }
             done("Permite \"Instalar apps desconocidas\" para Nioro Launcher y vuelve a tocar Actualizar")
             return
