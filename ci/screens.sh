@@ -74,6 +74,7 @@ hold() { timeout 20 adb shell input swipe "$1" "$2" "$1" "$2" 1300; }
   g_boton_lp() { timeout 20 adb shell input tap 136 2070; }
   rec v7_boton_launchpad g_boton_lp; back
   prefs 2; start; rec v8_rejilla_abrir g_boton_lp; back
+  FORMA=4 prefs 2; start; swipe_up; shot 13_iconos_cristal 3; back
   timeout 20 adb shell dumpsys gfxinfo $P reset > /dev/null
   for k in 1 2 3 4 5; do timeout 20 adb shell input tap 136 2070; sleep 1.5; back; sleep 1; done
   echo "== fluidez al abrir con el botón (5 veces)"

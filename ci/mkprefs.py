@@ -2,6 +2,7 @@
 """Crea los ajustes del launcher para las capturas: apps en el inicio y el dock y el estilo de vista de apps.
 Uso: mkprefs.py acts.txt ESTILO salida.xml"""
 import sys
+import os
 from xml.sax.saxutils import escape
 
 acts, style, out = sys.argv[1], int(sys.argv[2]), sys.argv[3]
@@ -26,6 +27,7 @@ nl = "&#10;"
 xml = ["<?xml version='1.0' encoding='utf-8' standalone='yes' ?>", "<map>",
        '    <boolean name="seeded" value="true" />',
        '    <int name="drawerStyle" value="%d" />' % style,
+       '    <int name="iconShape" value="%d" />' % int(os.environ.get('FORMA', '0')),
        '    <string name="dockKeys">%s</string>' % nl.join(escape(k) for k in dock),
        '    <string name="homeKeys">%s</string>' % nl.join(escape(k) for k in home),
        '    <string name="knownKeys">%s</string>' % nl.join(escape(k) for k in keys),
