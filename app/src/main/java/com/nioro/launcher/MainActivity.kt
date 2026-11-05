@@ -36,6 +36,8 @@ class MainActivity : Activity() {
     private var resumed = false
     private var wasStopped = false
     private val overlayGuard = Runnable { if (overlay.active) overlay.hide() }
+    /** si al final no se abrió la vista de apps, la foto preparada se descarta (podría quedar vieja) */
+    private val dropWarm = Runnable { if (drawerP == 0f && recentsP == 0f) backdrop.release() }
     private val calmDown = Runnable { Compat.applyRefreshRate(this, false) }
 
     private val pkgReceiver = object : BroadcastReceiver() {
@@ -114,6 +116,11 @@ class MainActivity : Activity() {
         else registerReceiver(pkgReceiver, f)
 
         reloadApps()
+        if (CrashGuard.safeMode) {
+            Toast.makeText(this, "Nioro se recuperó de un error: modo seguro (sin desenfoque) por un momento", Toast.LENGTH_LONG).show()
+        }
+        // tras un minuto funcionando bien se olvidan los cierres anteriores
+        root.postDelayed({ CrashGuard.markStable() }, 60_000L)
         try {
             (getSystemService(Context.CAMERA_SERVICE) as android.hardware.camera2.CameraManager).registerTorchCallback(torchCb, null)
             torchReg = true
@@ -258,13 +265,16 @@ class MainActivity : Activity() {
     private fun updateBackdrop() {
         val p = maxOf(drawerP, recentsP)
         home.setDrawerProgress(p)
-        val blurOn = Prefs.blur && !Prefs.saver
+        val blurOn = Prefs.blur && !Prefs.saver && !CrashGuard.safeMode
         if (p > 0.001f) {
-            if (blurOn && !backdrop.tried) backdrop.capture(home)
-            backdrop.progress = p
             // vistas a pantalla completa: el inicio se desvanece casi del todo para que sus iconos
             // no se mezclen con los del cajón mientras sube con el dedo (rejilla y abanico lo dejan ver)
-            val keep = if (recentsP > drawerP || Prefs.drawerStyle == 1 || Prefs.drawerStyle == 2) 0.35f else 0.85f
+            val see = recentsP > drawerP || Prefs.drawerStyle == 1 || Prefs.drawerStyle == 2
+            val keep = if (see) 0.35f else 0.85f
+            // a pantalla completa y con el desenfoque del sistema (Android 12+) sobra la foto difuminada
+            // del inicio: hacerla dibuja todo el inicio en la CPU en el primer fotograma (tirón al abrir)
+            if (blurOn && !backdrop.tried && (see || !systemBlur())) backdrop.capture(home)
+            backdrop.progress = p
             home.alpha = if (backdrop.hasSnapshot) 1f - p else 1f - keep * p
         } else {
             backdrop.release()
@@ -272,6 +282,9 @@ class MainActivity : Activity() {
         }
         wallpaperBlur(if (blurOn) p else 0f)
     }
+
+    private fun systemBlur(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+        try { windowManager.isCrossWindowBlurEnabled } catch (t: Throwable) { false }
 
     /** Android 12+: el sistema difumina el fondo de pantalla detrás del launcher (lo hace la GPU del compositor). */
     private fun wallpaperBlur(p: Float) {
@@ -491,6 +504,16 @@ class MainActivity : Activity() {
         override fun openDrawer() {
             menu.dismiss()
             drawer.open(home.launchpadX())
+        }
+        override fun prewarmDrawer() {
+            // Rejilla y Abanico dejan ver el inicio difuminado: la foto se hace ya, al apoyar el dedo,
+            // y no en el primer fotograma de la apertura (ahí provocaba un tirón)
+            val st = Prefs.drawerStyle
+            if ((st == 1 || st == 2) && Prefs.blur && !Prefs.saver && !CrashGuard.safeMode && !backdrop.tried && drawerP == 0f && recentsP == 0f) {
+                backdrop.capture(home)
+                root.removeCallbacks(dropWarm)
+                root.postDelayed(dropWarm, 900L)
+            }
         }
         override fun drawerDrag(stage: Int, p: Float, velocity: Float) {
             when (stage) {

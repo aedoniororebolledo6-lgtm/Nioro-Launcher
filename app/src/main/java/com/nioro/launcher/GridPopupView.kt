@@ -134,9 +134,16 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
     }
 
     override fun onOpen() {
+        invalidateChrome()
         layout()
         scroll.jump(0f)
         indSp.snap(0f)
+    }
+
+    /** al cerrar se suelta la imagen guardada del panel (libera memoria de la GPU) */
+    override fun onClosed() {
+        chrome.discardDisplayList()
+        invalidateChrome()
     }
 
     override fun onFrame(dt: Float): Boolean {
@@ -172,25 +179,17 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
         val sy = lerp(0.06f, 1f, min(p, 1f) + over)
         c.save()
         c.scale(sx, sy, ax, pivotY)
-        // pico unido al panel (redondeado), con el mismo cristal
-        if (S.b(S.GRID_NUB) && !keyboardUp) { // con el teclado abierto el pico no apunta al dock: se oculta
-            nubPath.reset()
-            nubPath.moveTo(ax - dp(16f), panel.bottom - dp(2f))
-            nubPath.cubicTo(ax - dp(7f), panel.bottom - dp(2f), ax - dp(4f), panel.bottom + dp(11f), ax, panel.bottom + dp(12f))
-            nubPath.cubicTo(ax + dp(4f), panel.bottom + dp(11f), ax + dp(7f), panel.bottom - dp(2f), ax + dp(16f), panel.bottom - dp(2f))
-            nubPath.close()
-            nub.alpha = (52 * a).toInt()
-            c.drawPath(nubPath, nub)
-            nubRim.strokeWidth = dp(0.9f)
-            nubRim.alpha = (90 * a).toInt()
-            c.drawPath(nubPath, nubRim)
+        // el panel de cristal (pico, cristal y velo) va guardado como una imagen en la GPU: así al
+        // estirarse en la apertura no se vuelven a dibujar sus ~8 formas grandes en cada fotograma
+        // (antes eso hacía que la Rejilla se abriera a tirones en todos los móviles)
+        val nubOn = S.b(S.GRID_NUB) && !keyboardUp // con el teclado abierto el pico no apunta al dock: se oculta
+        if (c.isHardwareAccelerated) {
+            val node = chromeNode(ax, nubOn)
+            node.setAlpha(a)
+            c.drawRenderNode(node)
+        } else {
+            drawChrome(c, ax, nubOn, a)
         }
-        glass.draw(c, panel, dp(36f), a, true, S.SF_GRIDPANEL)
-        // velo oscuro muy suave para que iconos y nombres se lean sobre cualquier fondo
-        Squircle.path(panelPath, panel, dp(36f))
-        tint.color = Color.BLACK
-        tint.alpha = (34 * a).toInt()
-        c.drawPath(panelPath, tint)
         // cabecera: título que entra deslizándose y contador en cápsula
         if (S.b(S.GRID_TITLE)) {
             val tq = clamp01(p * 1.8f - 0.35f)
@@ -208,7 +207,7 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
         }
 
         c.save()
-        c.clipPath(panelPath)
+        // recorte rectangular (barato): la zona de iconos ya queda dentro de las esquinas redondeadas
         c.clipRect(panel.left, areaTop, panel.right, areaBottom)
         val first = max(0, ((scroll.value - dp(4f)) / cellH).toInt() * cols)
         var i = first
@@ -241,6 +240,60 @@ class GridPopupView(ctx: Context) : AppsView(ctx) {
             c.drawRoundRect(panel.right - dp(8f), top, panel.right - dp(4.5f), top + th, dp(2f), dp(2f), bar)
         }
         c.restore()
+    }
+
+    // ---- panel de cristal guardado (se vuelve a grabar solo si cambia su tamaño, el pico o el estilo)
+    private val chrome = android.graphics.RenderNode("rejilla")
+    private val chromeRect = RectF()
+    private var chromeAx = Float.NaN
+    private var chromeNub = false
+    private var chromeStamp = -1
+
+    /** se llama al abrir: los ajustes de cristal pueden haber cambiado */
+    private fun invalidateChrome() {
+        chromeStamp = -1
+    }
+
+    private fun chromeNode(ax: Float, nubOn: Boolean): android.graphics.RenderNode {
+        val stamp = Prefs.glass * 31 + S.i(S.P_SHADOWS) + (if (Prefs.saver) 7 else 0)
+        if (chromeStamp == stamp && chromeRect == panel && chromeAx == ax && chromeNub == nubOn && chrome.hasDisplayList()) return chrome
+        chromeStamp = stamp
+        chromeRect.set(panel)
+        chromeAx = ax
+        chromeNub = nubOn
+        // margen para la sombra y el pico, que sobresalen del panel
+        val m = dp(24f)
+        val l = (panel.left - m).toInt()
+        val t = (panel.top - m).toInt()
+        chrome.setPosition(l, t, (panel.right + m).toInt(), (panel.bottom + m).toInt())
+        // capa propia: la GPU la guarda como textura y la escala/desvanece sin redibujar
+        chrome.setUseCompositingLayer(true, null)
+        val rc = chrome.beginRecording()
+        rc.translate(-l.toFloat(), -t.toFloat())
+        drawChrome(rc, ax, nubOn, 1f)
+        chrome.endRecording()
+        return chrome
+    }
+
+    /** pico unido al panel, cristal y velo oscuro suave (para que iconos y nombres se lean) */
+    private fun drawChrome(c: Canvas, ax: Float, nubOn: Boolean, a: Float) {
+        if (nubOn) {
+            nubPath.reset()
+            nubPath.moveTo(ax - dp(16f), panel.bottom - dp(2f))
+            nubPath.cubicTo(ax - dp(7f), panel.bottom - dp(2f), ax - dp(4f), panel.bottom + dp(11f), ax, panel.bottom + dp(12f))
+            nubPath.cubicTo(ax + dp(4f), panel.bottom + dp(11f), ax + dp(7f), panel.bottom - dp(2f), ax + dp(16f), panel.bottom - dp(2f))
+            nubPath.close()
+            nub.alpha = (52 * a).toInt()
+            c.drawPath(nubPath, nub)
+            nubRim.strokeWidth = dp(0.9f)
+            nubRim.alpha = (90 * a).toInt()
+            c.drawPath(nubPath, nubRim)
+        }
+        glass.draw(c, panel, dp(36f), a, true, S.SF_GRIDPANEL)
+        Squircle.path(panelPath, panel, dp(36f))
+        tint.color = Color.BLACK
+        tint.alpha = (34 * a).toInt()
+        c.drawPath(panelPath, tint)
     }
 
     private fun idxAt(x: Float, y: Float): Int {

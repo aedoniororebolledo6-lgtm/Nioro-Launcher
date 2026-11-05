@@ -8,6 +8,7 @@ import kotlin.reflect.KProperty
 class LauncherApp : Application() {
     override fun onCreate() {
         super.onCreate()
+        CrashGuard.install(this)
         Prefs.init(this)
         S.init(this)
     }

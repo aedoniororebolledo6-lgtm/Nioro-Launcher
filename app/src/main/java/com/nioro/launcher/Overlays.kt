@@ -361,6 +361,7 @@ class BackdropView(ctx: Context) : View(ctx) {
     override fun onDraw(c: Canvas) {
         val b = bmp ?: return
         paint.alpha = (255 * clamp01(progress)).toInt()
+        if (paint.alpha == 0) return
         dst.set(0f, 0f, width.toFloat(), height.toFloat())
         c.drawBitmap(b, null, dst, paint)
     }
