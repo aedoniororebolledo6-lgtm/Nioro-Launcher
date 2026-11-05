@@ -83,10 +83,10 @@ hold() { timeout 20 adb shell input swipe "$1" "$2" "$1" "$2" 1300; }
   # Ajustes: portada y galería de diseños del dock
   prefs 0; timeout 60 adb shell am start -W -n $P/.SettingsActivity > /dev/null 2>&1; sleep 5; shot 30_ajustes 1
   timeout 20 adb shell input swipe 540 1800 540 600 400; sleep 2; shot 31_ajustes_abajo 1
-  timeout 60 adb shell am start -W -n $P/.SettingsActivity --ei page 1 > /dev/null 2>&1; sleep 6; shot 32_ajustes_dock 1
+  timeout 60 adb shell am start -S -W -n $P/.SettingsActivity --ei page 1 > /dev/null 2>&1; sleep 6; shot 32_ajustes_dock 1
   timeout 20 adb shell input swipe 540 1800 540 500 500; sleep 2; shot 33_galeria_dock 1
   timeout 20 adb shell input swipe 540 1800 540 500 500; sleep 2; shot 34_galeria_dock2 1
-  timeout 60 adb shell am start -W -n $P/.SettingsActivity --ei page 0 > /dev/null 2>&1; sleep 6
+  timeout 60 adb shell am start -S -W -n $P/.SettingsActivity --ei page 0 > /dev/null 2>&1; sleep 6
   timeout 20 adb shell input swipe 540 1700 540 900 400; sleep 2; shot 35_ajustes_inicio 1
   back; back
   # 5) menú contextual de un icono del inicio (mantener pulsado el primero)

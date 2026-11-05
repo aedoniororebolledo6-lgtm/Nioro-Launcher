@@ -1362,6 +1362,9 @@ class HeroView(ctx: Context) : View(ctx) {
     private val ticker = Ticker { onFrame(it) }
     private var t = 0f
     private val glass = Glass()
+    /** el dock de la vista previa usa el diseño elegido (Burbujas, Estante, Ola...) */
+    private val art = DockArt()
+    private val screenPath = android.graphics.Path()
     private val screen = Paint(Paint.ANTI_ALIAS_FLAG)
     private val icon = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val clock = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -1443,16 +1446,26 @@ class HeroView(ctx: Context) : View(ctx) {
             sum += unit * sc[i]
         }
         val bottom = r.bottom - dp(18f)
-        d.set(x0 - dp(10f), bottom - base - dp(10f), x0 + m * unit + dp(10f), bottom + dp(10f))
-        glass.draw(c, d, dp(18f), 1f)
+        val form = S.i(S.K_SHAPE)
+        val mat = art.settingsMat()
+        screenPath.reset()
+        screenPath.addRoundRect(r, dp(24f), dp(24f), android.graphics.Path.Direction.CW)
+        c.save()
+        c.clipPath(screenPath) // la Pestaña llega al borde de la "pantalla"
+        art.bodyRect(form, d, w, max(m * unit, sum) + dp(20f), bottom - base / 2f, base + dp(20f), r.bottom)
+        if (mat != null) art.drawBody(c, form, d, base + dp(20f), 1f, mat, S.b(S.K_DOUBLE))
         var x = (w - sum) / 2f
         val lf = Motion.liftFactor(Prefs.dockMode)
         for (i in 0 until m) {
             val sw = unit * sc[i]
             val sz = base * sc[i]
-            drawApp(c, i + 11, x + sw / 2f, bottom - sz / 2f - (sc[i] - 1f) * base * lf, sz)
+            val cx = x + sw / 2f
+            val cy = bottom - sz / 2f - (sc[i] - 1f) * base * lf
+            if (mat != null && DockDesigns.perIcon(form)) art.drawTile(c, form, cx, cy, sz, 1f, mat)
+            drawApp(c, i + 11, cx, cy, sz)
             x += sw
         }
+        c.restore()
     }
 }
 
