@@ -201,13 +201,22 @@ class GlyphDrawable(private val kind: Int, private val sizeDp: Float, private va
         val px = dp(sizeDp).toInt()
         setBounds(0, 0, px, px)
     }
+    private var a = 255
     override fun draw(c: Canvas) {
+        if (a == 0) return
         val b = bounds
-        Glyphs.draw(c, kind, b.exactCenterX(), b.exactCenterY(), b.width().toFloat(), color)
+        val col = if (a >= 255) color else (color and 0x00FFFFFF) or ((((color ushr 24) * a) / 255) shl 24)
+        Glyphs.draw(c, kind, b.exactCenterX(), b.exactCenterY(), b.width().toFloat(), col)
     }
     override fun getIntrinsicWidth(): Int = dp(sizeDp).toInt()
     override fun getIntrinsicHeight(): Int = dp(sizeDp).toInt()
-    override fun setAlpha(alpha: Int) {}
+    override fun setAlpha(alpha: Int) {
+        val v = alpha.coerceIn(0, 255)
+        if (v != a) {
+            a = v
+            invalidateSelf()
+        }
+    }
     override fun setColorFilter(colorFilter: ColorFilter?) {}
     @Deprecated("Deprecated in Java")
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
