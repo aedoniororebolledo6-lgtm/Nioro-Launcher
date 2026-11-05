@@ -1,13 +1,10 @@
 package com.nioro.launcher
 
-import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
-import android.graphics.Shader
 import kotlin.math.PI
 import kotlin.math.max
 import kotlin.math.min

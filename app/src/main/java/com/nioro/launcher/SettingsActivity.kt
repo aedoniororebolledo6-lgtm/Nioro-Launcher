@@ -139,9 +139,18 @@ class SettingsActivity : Activity() {
             ins
         }
         push(buildMain(), false)
+        // si Ajustes se abre sin el launcher en marcha, se cargan las apps para que las vistas previas
+        // (inicio, dock, diseños) enseñen tus iconos de verdad
+        if (AppRepo.apps.isEmpty()) AppRepo.load(this) { if (!isDestroyed) repaintTree(stack) }
         // al repintarse con un tema nuevo vuelve a la categoría donde estabas
         val start = savedInstanceState?.getInt("cat", -1)?.takeIf { it >= 0 } ?: intent.getIntExtra("page", -1)
         if (start in 0..8) stack.post { push(buildCategory(start), false) }
+    }
+
+    /** vuelve a dibujar todas las vistas (p. ej. cuando terminan de cargar los iconos) */
+    private fun repaintTree(v: View) {
+        v.invalidate()
+        if (v is ViewGroup) for (i in 0 until v.childCount) repaintTree(v.getChildAt(i))
     }
 
     /** categoría abierta ahora (-1 = portada); se guarda para recreate() */
