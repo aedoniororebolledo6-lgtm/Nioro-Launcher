@@ -181,7 +181,8 @@ class DockArt {
                 out.set((w - sw) / 2f, cy - h * 0.04f, (w + sw) / 2f, cy + h / 2f + dp(2f))
             }
             DockDesigns.F_ISLAND -> {
-                val iw = max(h * 2f, capW * 0.92f)
+                // algo más ceñida que la cápsula, pero sin que los iconos de los extremos se salgan
+                val iw = max(h * 2f, capW - dp(6f))
                 out.set((w - iw) / 2f, cy - h * 0.43f, (w + iw) / 2f, cy + h * 0.43f)
             }
             else -> out.set((w - capW) / 2f, cy - h / 2f, (w + capW) / 2f, cy + h / 2f)
