@@ -43,10 +43,11 @@ hold() { timeout 20 adb shell input swipe "$1" "$2" "$1" "$2" 1300; }
   # 6) vídeos de las animaciones: cada uno se convierte en una tira de fotogramas (10 por segundo)
   rec() {
     n=$1; shift
-    timeout 25 adb shell "screenrecord --time-limit 3 --size 540x1170 --bit-rate 6000000 /sdcard/$n.mp4" &
+    L=${REC_S:-3}
+    timeout 25 adb shell "screenrecord --time-limit $L --size 540x1170 --bit-rate 6000000 /sdcard/$n.mp4" &
     RP=$!; sleep 1; "$@"; wait $RP; sleep 1
     timeout 30 adb pull /sdcard/$n.mp4 shots/$n.mp4 > /dev/null 2>&1
-    ffmpeg -loglevel error -y -i shots/$n.mp4 -vf "fps=10,scale=180:-1,tile=10x3" -frames:v 1 "shots/$n.png" && echo "video $n"
+    ffmpeg -loglevel error -y -i shots/$n.mp4 -vf "fps=${FPS:-10},scale=180:-1,tile=10x3" -frames:v 1 "shots/$n.png" && echo "video $n"
   }
   g_paginas() { timeout 20 adb shell input swipe 900 1300 150 1300 260; sleep 1.1; timeout 20 adb shell input swipe 150 1300 900 1300 260; }
   g_abrir_lento() { timeout 20 adb shell input swipe 540 1750 540 950 900; }
@@ -59,7 +60,7 @@ hold() { timeout 20 adb shell input swipe "$1" "$2" "$1" "$2" 1300; }
   rec v3_cerrar_tirando g_cerrar_tirando
   prefs 2; start; swipe_up; sleep 2; rec v4_rejilla_cerrar g_tocar_fuera
   prefs 3; start; swipe_up; sleep 2; rec v5_lista_fling g_lista_fling; back
-  prefs 2; start; swipe_up; sleep 2; rec v6_gota_busqueda g_gota; back; back
+  prefs 2; start; swipe_up; sleep 2; REC_S=7 FPS=5 rec v6_gota_busqueda g_gota; back; back
 
   # 7) cajón a mitad de gesto: el dedo se queda quieto a media subida
   prefs 0; start
