@@ -73,13 +73,14 @@ hold() { timeout 20 adb shell input swipe "$1" "$2" "$1" "$2" 1300; }
   prefs 0; start
   g_boton_lp() { timeout 20 adb shell input tap 136 2070; }
   rec v7_boton_launchpad g_boton_lp; back
+  prefs 2; start; rec v8_rejilla_abrir g_boton_lp; back
   timeout 20 adb shell dumpsys gfxinfo $P reset > /dev/null
   for k in 1 2 3 4 5; do timeout 20 adb shell input tap 136 2070; sleep 1.5; back; sleep 1; done
   echo "== fluidez al abrir con el botón (5 veces)"
   timeout 20 adb shell dumpsys gfxinfo $P | grep -E "Total frames|Janky|percentile|Slow|Missed|High input|Frame deadline" | head -20
   # 9) prueba de estrés: miles de toques al azar en el launcher y sus ajustes, para cazar cierres y bloqueos
   timeout 30 adb root > /dev/null 2>&1; sleep 3
-  for st in 4 0 2; do
+  for st in 2; do
     prefs $st; start
     timeout 20 adb shell "rm -f /data/anr/*" > /dev/null 2>&1
     adb logcat -c

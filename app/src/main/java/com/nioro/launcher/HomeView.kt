@@ -48,6 +48,8 @@ class HomeView(ctx: Context) : View(ctx) {
         fun special(i: Int)
         /** deslizar hacia arriba: la vista de apps sigue al dedo (0 empieza · 1 mueve · 2 suelta; p = 1 abrir) */
         fun drawerDrag(stage: Int, p: Float, velocity: Float) {}
+        /** el dedo bajó sobre el botón de la vista de apps: se puede preparar antes de abrir */
+        fun prewarmDrawer() {}
     }
 
     class Slot(val kind: Int, val key: String?) { // 0 app, 1 launchpad, 2 recientes, 3 separador
@@ -2712,6 +2714,7 @@ class HomeView(ctx: Context) : View(ctx) {
                     scrubbing = true
                     scrubX = x
                     tickSlot = slotAt(x)
+                    if (tickSlot?.kind == 1) host?.prewarmDrawer()
                     press(null, tickSlot)
                     updateDockTargets()
                     ticker.kick()

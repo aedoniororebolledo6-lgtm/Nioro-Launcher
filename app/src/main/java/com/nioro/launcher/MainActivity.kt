@@ -36,6 +36,8 @@ class MainActivity : Activity() {
     private var resumed = false
     private var wasStopped = false
     private val overlayGuard = Runnable { if (overlay.active) overlay.hide() }
+    /** si al final no se abrió la vista de apps, la foto preparada se descarta (podría quedar vieja) */
+    private val dropWarm = Runnable { if (drawerP == 0f && recentsP == 0f) backdrop.release() }
     private val calmDown = Runnable { Compat.applyRefreshRate(this, false) }
 
     private val pkgReceiver = object : BroadcastReceiver() {
@@ -502,6 +504,16 @@ class MainActivity : Activity() {
         override fun openDrawer() {
             menu.dismiss()
             drawer.open(home.launchpadX())
+        }
+        override fun prewarmDrawer() {
+            // Rejilla y Abanico dejan ver el inicio difuminado: la foto se hace ya, al apoyar el dedo,
+            // y no en el primer fotograma de la apertura (ahí provocaba un tirón)
+            val st = Prefs.drawerStyle
+            if ((st == 1 || st == 2) && Prefs.blur && !Prefs.saver && !CrashGuard.safeMode && !backdrop.tried && drawerP == 0f && recentsP == 0f) {
+                backdrop.capture(home)
+                root.removeCallbacks(dropWarm)
+                root.postDelayed(dropWarm, 900L)
+            }
         }
         override fun drawerDrag(stage: Int, p: Float, velocity: Float) {
             when (stage) {
