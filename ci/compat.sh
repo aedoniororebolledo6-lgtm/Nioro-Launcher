@@ -7,7 +7,14 @@ NAME=${1:-android}
 P=com.nioro.launcher
 mkdir -p compat
 R=compat/$NAME.txt
-adb install -r app/build/outputs/apk/debug/app-debug.apk > /dev/null 2>&1
+# Android 13/14 dicen "arrancado" antes de tiempo: se espera a que el sistema responda de verdad
+for i in $(seq 1 60); do adb shell pm path android > /dev/null 2>&1 && break; sleep 5; done
+sleep 25
+for i in 1 2 3 4; do
+  adb wait-for-device
+  timeout 120 adb install -r app/build/outputs/apk/debug/app-debug.apk > /dev/null 2>&1 && break
+  sleep 20
+done
 adb shell cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.LAUNCHER > acts.txt 2>&1
 
 prefs() {
