@@ -85,6 +85,11 @@ hold() { timeout 20 adb shell input swipe "$1" "$2" "$1" "$2" 1300; }
   SVALS="dock.shape=7" prefs 0; start; rec v9_dock_burbujas g_scrub
   SVALS="dock.shape=11,glass.0.tint=3,glass.0.tintop=90" prefs 0; start; rec v10_dock_ola g_scrub
   SVALS="dock.shape=5,dock.reflect=1" prefs 0; start; rec v11_dock_estante g_scrub
+  # recientes en Burbujas: flotan, se arrastran con el dedo y estallan al mantenerlas
+  g_burbujas() { timeout 20 adb shell input tap 930 2070; sleep 2.2; timeout 20 adb shell input swipe 666 1170 300 620 900; }
+  g_estallar() { timeout 20 adb shell input tap 930 2070; sleep 2; timeout 20 adb shell input swipe 330 1382 330 1382 1100; }
+  RECIENTES=4 prefs 0; start; REC_S=6 FPS=5 rec v12_burbujas_arrastrar g_burbujas; back
+  RECIENTES=4 prefs 0; start; REC_S=8 FPS=4 rec v13_burbujas_estallar g_estallar; back
   # Ajustes: portada y galería de diseños del dock
   prefs 0; timeout 60 adb shell am start -W -n $P/.SettingsActivity > /dev/null 2>&1; sleep 5; shot 30_ajustes 1
   timeout 20 adb shell input swipe 540 1800 540 600 400; sleep 2; shot 31_ajustes_abajo 1
