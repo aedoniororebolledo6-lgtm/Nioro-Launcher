@@ -105,6 +105,12 @@ class Ticker(private val frame: (Float) -> Boolean) : Choreographer.FrameCallbac
     private var last = 0L
     /** último fotograma o petición (ms): detecta un bucle que se quedó parado */
     private var alive = 0L
+    /**
+     * Alguien pidió fotogramas (kick) mientras el bucle ya corría: el fotograma actual no debe ser el
+     * último aunque sus resortes hayan terminado. Antes ese aviso se perdía y una animación que empezaba
+     * justo al acabar otra se quedaba congelada a medias (p. ej. el dock con los iconos diminutos).
+     */
+    private var wantMore = false
 
     fun <T : Stepper> add(s: T): T {
         springs.add(s)
@@ -121,7 +127,10 @@ class Ticker(private val frame: (Float) -> Boolean) : Choreographer.FrameCallbac
             alive = now
             Screen.animStart()
             Choreographer.getInstance().postFrameCallback(this)
-        } else if (now - alive > 500L) {
+        } else {
+            wantMore = true
+        }
+        if (running && now - alive > 500L) {
             // "corriendo" pero sin fotogramas desde hace rato (p. ej. MIUI congeló la app): se reanuda
             alive = now
             last = 0L
@@ -143,12 +152,14 @@ class Ticker(private val frame: (Float) -> Boolean) : Choreographer.FrameCallbac
         val dt = if (last == 0L) Screen.frameSec else ((frameTimeNanos - last) / 1_000_000_000f).coerceIn(0.002f, 0.05f)
         last = frameTimeNanos
         var any = false
+        wantMore = false
         val sdt = dt * Prefs.speed
         for (i in 0 until springs.size) {
             if (springs[i].step(sdt)) any = true
         }
         val more = frame(dt)
-        if (any || more) {
+        if (any || more || wantMore) {
+            wantMore = false
             Choreographer.getInstance().postFrameCallback(this)
         } else {
             running = false

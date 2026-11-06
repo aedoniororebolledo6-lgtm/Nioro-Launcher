@@ -19,7 +19,7 @@ for line in open(acts, encoding="utf-8", errors="ignore"):
     k = pkg + "/" + cls
     if pkg != "com.nioro.launcher" and k not in keys:
         keys.append(k)
-dock = keys[:4]
+dock = keys[:int(os.environ.get("DOCKN", "4"))]
 home = keys[4:16]
 if pages:
     home = keys[4:10] + ["."] * 18 + keys[10:16]

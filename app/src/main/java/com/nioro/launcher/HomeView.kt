@@ -752,7 +752,8 @@ class HomeView(ctx: Context) : View(ctx) {
         val lpRight = S.b(S.K_LP_RIGHT)
         if (lp && !lpRight) slots.add(Slot(1, null))
         for (k in dockKeys) if (AppRepo.get(k) != null) slots.add(Slot(0, k))
-        if ((rc || (lp && lpRight)) && S.b(S.K_SEP)) slots.add(Slot(3, null))
+        // el separador solo va ENTRE dos grupos: si no hay nada a su izquierda, sobraría (una raya suelta)
+        if ((rc || (lp && lpRight)) && S.b(S.K_SEP) && slots.isNotEmpty()) slots.add(Slot(3, null))
         if (lp && lpRight) slots.add(Slot(1, null))
         if (rc) slots.add(Slot(2, null))
         ticker.springs.clear()
@@ -803,7 +804,9 @@ class HomeView(ctx: Context) : View(ctx) {
             dockShrink.to(0f)
             grew = true
         }
-        if (grew) ticker.kick()
+        // si el dock se reconstruye a mitad de una animación (p. ej. al volver de Ajustes), los resortes
+        // copiados siguen activos: el bucle tiene que seguir para que no se queden congelados a medias
+        if (grew || slots.any { it.gw.active || it.sc.active || it.by.active || it.bs.active || it.br.active || it.bx.active || it.run.active }) ticker.kick()
     }
 
     private fun layoutDock() {
@@ -2556,8 +2559,17 @@ class HomeView(ctx: Context) : View(ctx) {
         for (s in slots) {
             if (s.kind == 3) {
                 dotPaint.color = Color.argb((90 * a).toInt(), 255, 255, 255)
-                tmpRect.set(s.cx - dp(0.8f), dockCy - dockIconPx * 0.4f + dy, s.cx + dp(0.8f), dockCy + dockIconPx * 0.4f + dy)
-                c.drawRoundRect(tmpRect, dp(1f), dp(1f), dotPaint)
+                var st = dockCy - dockIconPx * 0.4f + dy
+                var sb = dockCy + dockIconPx * 0.4f + dy
+                // con fondo, el separador nunca asoma fuera de él (en el Estante 3D se salía por arriba)
+                if (dm != null && form != DockDesigns.F_NONE && form != DockDesigns.F_LINE && !DockDesigns.perIcon(form)) {
+                    st = max(st, capRect.top + dp(6f))
+                    sb = min(sb, dockBottom - dp(6f))
+                }
+                if (sb - st > dp(4f)) {
+                    tmpRect.set(s.cx - dp(0.8f), st, s.cx + dp(0.8f), sb)
+                    c.drawRoundRect(tmpRect, dp(1f), dp(1f), dotPaint)
+                }
                 continue
             }
             val bmp: android.graphics.Bitmap? = when (s.kind) {
