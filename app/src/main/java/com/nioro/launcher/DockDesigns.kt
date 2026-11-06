@@ -204,12 +204,8 @@ class DockArt {
             }
             DockDesigns.F_SHELF -> {
                 shelfPath(r, h)
+                // (sin raya extra arriba: sobresalía por las esquinas redondeadas; el borde de cristal ya lo marca)
                 glass.drawMat(c, r, h * 0.2f, a, true, m, path)
-                // filo de luz en el borde delantero del estante
-                line.shader = null
-                line.color = Color.argb((110 * a * m.alpha).toInt().coerceIn(0, 255), 255, 255, 255)
-                val ins = h * 0.3f
-                c.drawRect(r.left + ins, r.top + dp(1f), r.right - ins, r.top + dp(2.2f), line)
                 return
             }
             DockDesigns.F_TAB -> {
