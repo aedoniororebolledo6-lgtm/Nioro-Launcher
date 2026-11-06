@@ -75,6 +75,8 @@ hold() { timeout 20 adb shell input swipe "$1" "$2" "$1" "$2" 1300; }
   SVALS="home.layout=2" prefs 0; start; shot 21_org_sonrisa 2
   SVALS="home.layout=5" prefs 0; start; shot 22_org_dividida 2
   SVALS="home.layout=4,dock.shape=5,dock.reflect=1" prefs 0; start; shot 23_pulgar_estante 2
+  DOCKN=0 SVALS="dock.shape=5,dock.reflect=1" prefs 0; start; shot 23b_estante_sin_apps 2
+  DOCKN=1 SVALS="dock.shape=5,dock.reflect=1" prefs 0; start; shot 23c_estante_una_app 2
   SVALS="dock.shape=7" prefs 0; start; shot 24_dock_burbujas 2
   SVALS="dock.shape=11,glass.0.tint=3,glass.0.tintop=90" prefs 0; start; shot 25_dock_ola 2
   SVALS="dock.shape=6,glass.0.tint=2,glass.0.tintop=170" prefs 0; start; shot 26_dock_pestana 2
